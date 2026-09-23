@@ -11,10 +11,10 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
 <style>
 :root{
-  --ground:#F0F2EF; --surface:#FFFFFF; --ink:#1A2023; --muted:#586367; --rule:#D2D8D5;
-  --accent:#0C6A74; --accent-ink:#FFFFFF; --mark:#F2BE0A; --mark-ink:#1A2023;
-  --band:#1D282C; --band-ink:#EDF1F0; --band-muted:#A7B4B7; --band-rule:#34454A;
-  --tint:#E3E9E6;
+  --ground:#F3F3F2; --surface:#FFFFFF; --ink:#1A1A1A; --muted:#5E5E5E; --rule:#DADADA;
+  --accent:#C21F2A; --accent-ink:#FFFFFF; --mark:#D3232F; --mark-ink:#FFFFFF;
+  --band:#161616; --band-ink:#F4F4F4; --band-muted:#A9A9A9; --band-rule:#2E2E2E;
+  --tint:#ECEBEA;
   --display:"Archivo","Arial Narrow",system-ui,sans-serif;
   --sans:"Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;
   --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
@@ -23,16 +23,16 @@
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     color-scheme:dark;
-    --ground:#111618; --surface:#182023; --ink:#E4EAE9; --muted:#9AA7AA; --rule:#2A3538;
-    --accent:#5BBDC6; --accent-ink:#0C1416; --tint:#1C272A;
-    --band:#0A0E0F; --band-ink:#E4EAE9; --band-muted:#8E9C9F; --band-rule:#243034;
+    --ground:#121212; --surface:#1B1B1B; --ink:#EDEDED; --muted:#A3A3A3; --rule:#2E2E2E;
+    --accent:#EE5A62; --accent-ink:#121212; --tint:#242424; --mark:#E0333E;
+    --band:#0A0A0A; --band-ink:#EDEDED; --band-muted:#8F8F8F; --band-rule:#262626;
   }
 }
 :root[data-theme="dark"]{
   color-scheme:dark;
-  --ground:#111618; --surface:#182023; --ink:#E4EAE9; --muted:#9AA7AA; --rule:#2A3538;
-  --accent:#5BBDC6; --accent-ink:#0C1416; --tint:#1C272A;
-  --band:#0A0E0F; --band-ink:#E4EAE9; --band-muted:#8E9C9F; --band-rule:#243034;
+  --ground:#121212; --surface:#1B1B1B; --ink:#EDEDED; --muted:#A3A3A3; --rule:#2E2E2E;
+    --accent:#EE5A62; --accent-ink:#121212; --tint:#242424; --mark:#E0333E;
+    --band:#0A0A0A; --band-ink:#EDEDED; --band-muted:#8F8F8F; --band-rule:#262626;
 }
 *{box-sizing:border-box}
 html{scroll-behavior:smooth; scroll-padding-top:calc(var(--top) + 72px)}
@@ -164,11 +164,15 @@ section.block{padding-block:64px}
 .to-top{font-family:var(--sans); font-size:14px; font-weight:600}
 
 /* committee */
-.committee .officers{display:flex; flex-wrap:wrap; gap:16px 48px; margin:0 0 20px}
+.committee .officers{gap:20px 40px; margin:0 0 20px}
 .officers dt{font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
 .officers dd{margin:4px 0 0; font-family:var(--display); font-stretch:80%; font-weight:750; font-size:28px; line-height:1.1}
 .committee p{color:var(--muted); max-width:60ch}
 
+.founders-h{font-size:13px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin:36px 0 12px; padding-top:24px; border-top:1px solid var(--rule)}
+.founders{list-style:none; margin:0 0 28px; padding:0; display:flex; flex-wrap:wrap; gap:8px}
+.founders li{background:var(--surface); border:1px solid var(--rule); border-radius:999px; padding:6px 14px; font-weight:600; font-size:15px}
+.committee .officers{display:grid; grid-template-columns:repeat(auto-fill, minmax(200px,1fr))}
 footer{background:var(--band); color:var(--band-muted); padding-block:32px; font-size:14px}
 footer .wrap{display:flex; flex-wrap:wrap; gap:10px 32px; justify-content:space-between}
 footer a{color:var(--band-ink)}
@@ -299,8 +303,18 @@ footer a{color:var(--band-ink)}
   <section class="block committee" id="committee">
     <div class="wrap">
       <h2 class="sec">The committee</h2>
-      <p class="sec-lead">Questions about joining, rides or anything in the documents — give one of us a shout.</p>
-      <dl class="officers"><div><dt>Chair</dt><dd>Ram Sugavanam</dd></div><div><dt>Secretary</dt><dd>Maninder Kalkat</dd></div><div><dt>Treasurer</dt><dd>Manoj Sukumaran</dd></div></dl>
+      <p class="sec-lead">Your committee, who drew the short straws. Questions about joining, rides or anything in the documents — give one of us a shout.</p>
+      <dl class="officers">
+        <div><dt>Chair</dt><dd>Ram Sugavanam</dd></div>
+        <div><dt>Secretary</dt><dd>Maninder Kalkat</dd></div>
+        <div><dt>Treasurer</dt><dd>Manoj Sukumaran</dd></div>
+        <div><dt>Safeguarding</dt><dd>Pallavi Latthe</dd></div>
+        <div><dt>Data protection</dt><dd>Arasu Rayen</dd></div>
+      </dl>
+      <h3 class="founders-h">The founding members who got us here</h3>
+      <ul class="founders">
+        <li>Ram Sugavanam</li><li>Maninder Kalkat</li><li>Manoj Sukumaran</li><li>Pallavi Latthe</li><li>Arasu Rayen</li><li>Anupam Gupta</li><li>Aaron Dardi</li><li>Ravinder Kalkat</li><li>Kalpa Sundar</li>
+      </ul>
       <p>Leadership here is service, not rank. It isn’t a position anyone holds; it’s a responsibility anyone can pick up.</p>
     </div>
   </section>
