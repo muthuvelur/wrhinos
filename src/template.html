@@ -1,0 +1,372 @@
+<title>W/Rhinos Cycling Club</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+<style>
+:root{
+  --ground:#F0F2EF; --surface:#FFFFFF; --ink:#1A2023; --muted:#586367; --rule:#D2D8D5;
+  --accent:#0C6A74; --accent-ink:#FFFFFF; --mark:#F2BE0A; --mark-ink:#1A2023;
+  --band:#1D282C; --band-ink:#EDF1F0; --band-muted:#A7B4B7; --band-rule:#34454A;
+  --tint:#E3E9E6;
+  --display:"Archivo","Arial Narrow",system-ui,sans-serif;
+  --sans:"Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+  --top: env(safe-area-inset-top, 0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --ground:#111618; --surface:#182023; --ink:#E4EAE9; --muted:#9AA7AA; --rule:#2A3538;
+    --accent:#5BBDC6; --accent-ink:#0C1416; --tint:#1C272A;
+    --band:#0A0E0F; --band-ink:#E4EAE9; --band-muted:#8E9C9F; --band-rule:#243034;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#111618; --surface:#182023; --ink:#E4EAE9; --muted:#9AA7AA; --rule:#2A3538;
+  --accent:#5BBDC6; --accent-ink:#0C1416; --tint:#1C272A;
+  --band:#0A0E0F; --band-ink:#E4EAE9; --band-muted:#8E9C9F; --band-rule:#243034;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth; scroll-padding-top:calc(var(--top) + 72px)}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}
+body{background:var(--ground); color:var(--ink); font-family:var(--sans); font-size:16px; line-height:1.55}
+a{color:var(--accent)}
+a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid var(--mark); outline-offset:2px; border-radius:2px}
+.wrap{max-width:1120px; margin:0 auto; padding-inline:20px}
+.slash{color:var(--mark)}
+
+/* top bar */
+.bar{position:sticky; top:var(--top); z-index:10; background:var(--band); color:var(--band-ink); border-bottom:1px solid var(--band-rule)}
+.bar .wrap{display:flex; align-items:center; gap:20px; min-height:56px}
+.wordmark{font-family:var(--display); font-stretch:75%; font-weight:850; font-size:22px; letter-spacing:.02em; color:var(--band-ink); text-decoration:none; text-transform:uppercase}
+.bar nav{display:flex; gap:18px; margin-left:auto; flex-wrap:wrap}
+.bar nav a{color:var(--band-muted); text-decoration:none; font-size:14px; font-weight:500}
+.bar nav a:hover{color:var(--band-ink)}
+.bar .btn{padding:8px 14px; font-size:14px}
+@media (max-width:720px){ .bar nav{display:none} .bar .btn{margin-left:auto} }
+
+.btn{display:inline-flex; align-items:center; gap:8px; font-family:var(--sans); font-weight:700; font-size:16px; text-decoration:none; border-radius:4px; padding:13px 20px; border:2px solid transparent; cursor:pointer; line-height:1.1}
+.btn-mark{background:var(--mark); color:var(--mark-ink)}
+.btn-mark:hover{filter:brightness(1.06)}
+.btn-line{border-color:currentColor; color:inherit; background:transparent}
+.btn-line:hover{background:color-mix(in srgb, currentColor 10%, transparent)}
+.btn .arr{font-weight:400}
+
+/* hero */
+.hero{background:var(--band); color:var(--band-ink); padding-block:56px 64px; overflow:hidden}
+.eyebrow{font-size:13px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--band-muted); margin:0 0 14px}
+.hero h1{font-family:var(--display); font-stretch:62%; font-weight:900; font-size:clamp(76px, 17vw, 196px); line-height:.86; letter-spacing:-.01em; margin:0; text-transform:uppercase}
+.hero h1 .slash{display:inline-block; transform:skewX(-8deg)}
+.ethos{font-family:var(--display); font-stretch:85%; font-weight:600; font-size:clamp(20px, 3vw, 28px); line-height:1.2; margin:22px 0 0; max-width:22ch; text-wrap:balance}
+.ethos span{display:block; color:var(--band-muted)}
+.hero-lead{font-family:var(--serif); font-size:18px; line-height:1.6; color:var(--band-ink); opacity:.88; max-width:56ch; margin:26px 0 30px}
+.hero-actions{display:flex; flex-wrap:wrap; gap:12px}
+.hero-grid{display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:48px; align-items:end}
+.name-note{border-left:2px solid var(--mark); padding-left:16px; font-size:14px; color:var(--band-muted); line-height:1.55}
+.name-note b{color:var(--band-ink); font-weight:600}
+@media (max-width:860px){ .hero-grid{grid-template-columns:1fr; gap:32px} }
+
+section.block{padding-block:64px}
+.block h2.sec{font-family:var(--display); font-stretch:75%; font-weight:800; font-size:clamp(34px, 5vw, 48px); line-height:1; text-transform:uppercase; margin:0 0 10px; letter-spacing:.005em}
+.sec-lead{color:var(--muted); font-size:17px; max-width:60ch; margin:0 0 36px}
+
+/* join steps */
+.steps{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:20px}
+.step{background:var(--surface); border:1px solid var(--rule); border-radius:6px; padding:28px; display:flex; flex-direction:column; gap:14px}
+.step-num{font-family:var(--display); font-stretch:62%; font-weight:900; font-size:56px; line-height:.8; color:var(--accent)}
+.step h3{font-size:22px; margin:0; font-weight:700}
+.step p{margin:0; color:var(--muted)}
+.step .actions{display:flex; flex-wrap:wrap; gap:10px; margin-top:auto; padding-top:6px}
+.step .btn-line{color:var(--accent)}
+.btn-accent{background:var(--accent); color:var(--accent-ink)}
+.btn-accent:hover{filter:brightness(1.08)}
+.linkbox{display:flex; align-items:center; gap:8px; background:var(--tint); border-radius:4px; padding:6px 6px 6px 12px; min-width:0}
+.linkbox code{font-family:ui-monospace,"SF Mono",Consolas,monospace; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0; user-select:all}
+.copy{font:600 13px var(--sans); background:var(--surface); color:var(--ink); border:1px solid var(--rule); border-radius:3px; padding:6px 10px; cursor:pointer; white-space:nowrap}
+.after{margin-top:22px; color:var(--muted); font-size:15px}
+@media (max-width:760px){ .steps{grid-template-columns:1fr} .step{padding:22px} }
+
+/* glance */
+.glance{border-top:1px solid var(--rule)}
+.facts{display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:0; border-top:2px solid var(--ink)}
+.fact{padding:22px 24px 26px 0; border-bottom:1px solid var(--rule)}
+.fact:not(:nth-child(3n+1)){padding-left:24px; border-left:1px solid var(--rule)}
+.fact .k{font-family:var(--display); font-stretch:75%; font-weight:800; font-size:26px; line-height:1.05; text-transform:uppercase; margin:0 0 8px}
+.fact p{margin:0; color:var(--muted); font-size:15px}
+.fact .src{display:block; margin-top:10px; font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); opacity:.8}
+@media (max-width:860px){
+  .facts{grid-template-columns:1fr 1fr}
+  .fact:not(:nth-child(3n+1)){padding-left:0; border-left:0}
+  .fact:nth-child(even){padding-left:20px; border-left:1px solid var(--rule)}
+}
+@media (max-width:540px){
+  .facts{grid-template-columns:1fr}
+  .fact:nth-child(even){padding-left:0; border-left:0}
+}
+
+/* reader */
+.reader{background:var(--surface); border-top:1px solid var(--rule); border-bottom:1px solid var(--rule)}
+.tabs{display:flex; gap:4px; border-bottom:1px solid var(--rule); margin-bottom:0; flex-wrap:wrap}
+.tab{font:700 16px var(--sans); background:none; border:0; border-bottom:3px solid transparent; color:var(--muted); padding:12px 16px 12px 0; margin-right:16px; cursor:pointer}
+.tab[aria-selected="true"]{color:var(--ink); border-bottom-color:var(--mark)}
+.tab small{font-weight:500; color:var(--muted); margin-left:6px}
+.doc-head{display:flex; flex-wrap:wrap; gap:12px 24px; align-items:baseline; justify-content:space-between; padding-block:22px; border-bottom:1px solid var(--rule)}
+.doc-head p{margin:0; color:var(--muted); font-size:15px; max-width:60ch}
+.doc-head a{font-weight:600; font-size:15px; white-space:nowrap}
+.doc-grid{display:grid; grid-template-columns:260px minmax(0,1fr); gap:48px; padding-top:28px}
+.toc{position:sticky; top:calc(var(--top) + 76px); align-self:start; max-height:calc(100vh - var(--top) - 96px); overflow:auto; font-size:14px}
+.toc summary{font-weight:700; font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); cursor:pointer; padding:6px 0; list-style:none}
+.toc summary::-webkit-details-marker{display:none}
+.toc ol{list-style:none; margin:8px 0 0; padding:0}
+.toc a{display:flex; gap:8px; color:var(--muted); text-decoration:none; padding:4px 0 4px 10px; border-left:2px solid transparent; line-height:1.35}
+.toc a:hover{color:var(--ink)}
+.toc a.on{color:var(--ink); border-left-color:var(--mark)}
+.toc .toc-part a{color:var(--ink); font-weight:700; margin-top:12px; padding-left:10px}
+.toc .toc-part:first-child a{margin-top:0}
+.toc .toc-part span, .toc .toc-sec span{font-family:var(--display); font-stretch:75%; font-weight:700; color:var(--accent); min-width:1.6em}
+.toc .toc-sec a{padding-left:22px}
+#toc-co .toc-sec a{padding-left:10px}
+@media (max-width:900px){
+  .doc-grid{grid-template-columns:1fr; gap:8px; padding-top:16px}
+  .toc{position:static; max-height:none; border:1px solid var(--rule); border-radius:4px; padding:4px 14px}
+  .toc summary::after{content:" ▾"}
+  .toc details[open] summary::after{content:" ▴"}
+}
+
+.doc{font-family:var(--serif); font-size:18px; line-height:1.68; max-width:68ch; padding-bottom:40px}
+.doc p{margin:0 0 1em}
+.doc h2{font-family:var(--display); font-stretch:75%; font-weight:850; font-size:clamp(34px,5vw,46px); line-height:1; text-transform:uppercase; margin:56px 0 24px; padding-top:22px; border-top:2px solid var(--ink); text-wrap:balance}
+.doc .part:first-child h2{margin-top:8px}
+.part-num{display:block; font-size:15px; font-weight:700; letter-spacing:.14em; color:var(--accent); margin-bottom:8px}
+.doc h3{font-family:var(--sans); font-size:22px; font-weight:750; line-height:1.25; margin:40px 0 12px; text-wrap:balance}
+.doc h4{font-family:var(--sans); font-size:17px; font-weight:700; margin:28px 0 6px}
+.doc blockquote{margin:0 0 1.2em; padding:0 0 0 18px; border-left:3px solid var(--mark); font-style:italic; color:var(--muted); font-size:20px}
+.doc .motto{font-family:var(--display); font-stretch:80%; font-weight:700; font-size:21px; text-align:left; margin:28px 0; color:var(--accent)}
+.doc ul{margin:0 0 1.1em; padding-left:1.2em}
+.doc li{margin:0 0 .45em}
+.doc li::marker{color:var(--accent)}
+.doc strong{font-weight:600}
+.clause{display:grid; grid-template-columns:3em minmax(0,1fr); gap:0 6px}
+.clause-num{font-family:var(--display); font-stretch:75%; font-weight:700; color:var(--accent); font-size:.92em}
+.doc h3 .clause-num{display:inline-block; min-width:1.7em; font-size:1em}
+.signers{display:grid; grid-template-columns:repeat(auto-fill, minmax(180px,1fr)); gap:14px 24px; margin:20px 0; font-family:var(--sans)}
+.signers dt{font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted)}
+.signers dd{margin:2px 0 0; font-weight:600; font-size:17px}
+.note{font-size:15px; color:var(--muted)}
+.to-top{font-family:var(--sans); font-size:14px; font-weight:600}
+
+/* committee */
+.committee .officers{display:flex; flex-wrap:wrap; gap:16px 48px; margin:0 0 20px}
+.officers dt{font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
+.officers dd{margin:4px 0 0; font-family:var(--display); font-stretch:80%; font-weight:750; font-size:28px; line-height:1.1}
+.committee p{color:var(--muted); max-width:60ch}
+
+footer{background:var(--band); color:var(--band-muted); padding-block:32px; font-size:14px}
+footer .wrap{display:flex; flex-wrap:wrap; gap:10px 32px; justify-content:space-between}
+footer a{color:var(--band-ink)}
+.toast{position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom, 0px)); transform:translateX(-50%); background:var(--ink); color:var(--ground); padding:10px 16px; border-radius:4px; font-size:14px; font-weight:600; z-index:20}
+</style>
+
+<header class="bar">
+  <div class="wrap">
+    <a class="wordmark" href="#top">W<span class="slash">/</span>Rhinos</a>
+    <nav aria-label="Sections">
+      <a href="#join">How to join</a>
+      <a href="#glance">At a glance</a>
+      <a href="#framework" data-doc="fw">Framework</a>
+      <a href="#constitution" data-doc="co">Constitution</a>
+      <a href="#committee">Committee</a>
+    </nav>
+    <a class="btn btn-mark" href="https://forms.gle/cbHLRxi53QGC8Hys6" target="_blank" rel="noopener">Join <span class="arr">→</span></a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <p class="eyebrow">Birmingham W/Rhinos Cycling Club</p>
+        <h1>W<span class="slash">/</span>Rhinos</h1>
+        <p class="ethos">Freedom through Responsibility. <span>Adventure through Community.</span></p>
+        <p class="hero-lead">We exist because travelling by bicycle changes people. We organise rides, but organising rides is the method, not the point — the point is what happens to people on them.</p>
+        <div class="hero-actions">
+          <a class="btn btn-mark" href="https://forms.gle/cbHLRxi53QGC8Hys6" target="_blank" rel="noopener">Fill in the membership form <span class="arr">→</span></a>
+          <a class="btn btn-line" href="#framework" data-doc="fw">Read the Framework</a>
+        </div>
+      </div>
+      <aside class="name-note">
+        <b>Why “W/Rhinos”?</b> It began as an affectionate nickname — the <b>whining rhinos</b>, forever grumbling about hills and headwinds before getting on with it. We write it WRhinos where a form objects to punctuation.
+      </aside>
+    </div>
+  </section>
+
+  <section class="block" id="join">
+    <div class="wrap">
+      <h2 class="sec">How to join</h2>
+      <p class="sec-lead">Everyone who rides with us — rider, non-rider or support — needs to be a member. It’s quick and it’s free. Two things:</p>
+      <div class="steps">
+        <div class="step">
+          <span class="step-num">1</span>
+          <h3>Have a read of the Constitution and Framework</h3>
+          <p>The Constitution’s the dull-but-necessary rulebook; the Framework’s the spirit of how we ride. No need to memorise them — just a look before you join. Both are on this page to read any time.</p>
+          <div class="actions">
+            <a class="btn btn-line" href="#framework" data-doc="fw">Framework</a>
+            <a class="btn btn-line" href="#constitution" data-doc="co">Constitution</a>
+          </div>
+        </div>
+        <div class="step">
+          <span class="step-num">2</span>
+          <h3>Fill in the membership form</h3>
+          <p>About three minutes. Once you’re in, you’ll get ride details as they come up.</p>
+          <div class="linkbox">
+            <code id="form-url">https://forms.gle/cbHLRxi53QGC8Hys6</code>
+            <button class="copy" type="button" id="copy-form" data-copy="https://forms.gle/cbHLRxi53QGC8Hys6">Copy link</button>
+          </div>
+          <div class="actions">
+            <a class="btn btn-accent" href="https://forms.gle/cbHLRxi53QGC8Hys6" target="_blank" rel="noopener">Open the form <span class="arr">→</span></a>
+          </div>
+        </div>
+      </div>
+      <p class="after">Any questions, give one of the <a href="#committee">committee</a> a shout.</p>
+    </div>
+  </section>
+
+  <section class="block glance" id="glance">
+    <div class="wrap">
+      <h2 class="sec">At a glance</h2>
+      <p class="sec-lead">The handful of things worth knowing before your first ride. The documents below have the full detail.</p>
+      <div class="facts">
+        <div class="fact"><p class="k">Never a race</p><p>Speed, distance and climbing are personal achievements, not standing. It’s also an insurance condition — no races, time trials or mass starts.</p><span class="src">Framework · Standard One</span></div>
+        <div class="fact"><p class="k">Challenge with choice</p><p>Shorter stages, optional climbs, the van, or joining as a non-rider. Taking an option isn’t failure — it’s the design working.</p><span class="src">Framework · Standard One</span></div>
+        <div class="fact"><p class="k">Riders from age ten</p><p>Every rider under 18 is accompanied throughout by a parent, or an adult the parents have named in writing.</p><span class="src">Framework · Standard Two</span></div>
+        <div class="fact"><p class="k">E-bikes welcome</p><p>Standard pedelecs (assist to 25 km/h) on every ride. Plan your range and charging; speed pedelecs aren’t suitable.</p><span class="src">Framework · Standard Four</span></div>
+        <div class="fact"><p class="k">Trips run at cost</p><p>Deposit on booking, final balance billed after the trip once every cost is known. Plus a flat £50 per rider, given in full to a charity the riders choose.</p><span class="src">Framework · Standard Three</span></div>
+        <div class="fact"><p class="k">Insure yourself</p><p>Trips aren’t package holidays, so there’s no package-travel protection. Personal travel insurance is a requirement, not a suggestion.</p><span class="src">Framework · Standard Three</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="reader block" id="documents" aria-label="Club documents">
+    <div class="wrap">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tab-fw" aria-controls="doc-fw" aria-selected="true" data-doc="fw">The Framework<small>v2.0</small></button>
+        <button class="tab" role="tab" id="tab-co" aria-controls="doc-co" aria-selected="false" data-doc="co">The Constitution<small>adopted 20.09.2026</small></button>
+      </div>
+
+      <div id="doc-fw" role="tabpanel" aria-labelledby="tab-fw">
+        <span id="framework"></span>
+        <div class="doc-head">
+          <p>The spirit of how we ride: why we exist, the eight commitments of the Ride Charter, ride standards, the Trip Guide and how the club is run.</p>
+          <a href="https://drive.google.com/file/d/1CqMKLRAQy2WGNtnBL5d1d6fFFrhb0Lp2/view?usp=sharing" target="_blank" rel="noopener">Original PDF on Google Drive ↗</a>
+        </div>
+        <div class="doc-grid">
+          <nav class="toc" aria-label="Framework contents"><details open><summary>Contents</summary><ol id="toc-fw">{{FRAMEWORK_TOC}}</ol></details></nav>
+          <article class="doc">{{FRAMEWORK}}<p><a class="to-top" href="#documents">Back to contents ↑</a></p></article>
+        </div>
+      </div>
+
+      <div id="doc-co" role="tabpanel" aria-labelledby="tab-co" hidden>
+        <span id="constitution"></span>
+        <div class="doc-head">
+          <p>The rulebook of W/Rhinos Cycling Club as an unincorporated association: membership, meetings, the committee, money, safeguarding and discipline.</p>
+          <a href="https://docs.google.com/document/d/1CjIEkPF5dTtyqYEiMoylMrjmuhh9K2KR/edit?usp=sharing&amp;ouid=108773595984382311376&amp;rtpof=true&amp;sd=true" target="_blank" rel="noopener">Original on Google Docs ↗</a>
+        </div>
+        <div class="doc-grid">
+          <nav class="toc" aria-label="Constitution contents"><details open><summary>Contents</summary><ol id="toc-co">{{CONSTITUTION_TOC}}</ol></details></nav>
+          <article class="doc">
+            <p class="motto">W/Rhinos Constitution — of an unincorporated association</p>
+            {{CONSTITUTION}}
+            <p><a class="to-top" href="#documents">Back to contents ↑</a></p>
+          </article>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block committee" id="committee">
+    <div class="wrap">
+      <h2 class="sec">The committee</h2>
+      <p class="sec-lead">Questions about joining, rides or anything in the documents — give one of us a shout.</p>
+      <dl class="officers">{{OFFICERS}}</dl>
+      <p>Leadership here is service, not rank. It isn’t a position anyone holds; it’s a responsibility anyone can pick up.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>W/Rhinos Cycling Club · Birmingham</span>
+    <span><a href="https://forms.gle/cbHLRxi53QGC8Hys6" target="_blank" rel="noopener">Membership form</a> · <a href="#framework" data-doc="fw">Framework</a> · <a href="#constitution" data-doc="co">Constitution</a></span>
+  </div>
+</footer>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(function(){
+  var tabs = document.querySelectorAll('.tab');
+  function show(which, scroll){
+    tabs.forEach(function(t){ t.setAttribute('aria-selected', t.dataset.doc === which ? 'true' : 'false'); });
+    document.getElementById('doc-fw').hidden = which !== 'fw';
+    document.getElementById('doc-co').hidden = which !== 'co';
+    if (scroll) document.getElementById('documents').scrollIntoView();
+    watch();
+  }
+  tabs.forEach(function(t){ t.addEventListener('click', function(){ show(t.dataset.doc, false); }); });
+
+  // links into either document switch to the right tab first
+  document.addEventListener('click', function(e){
+    var a = e.target.closest('a[href^="#"]');
+    if (!a) return;
+    var id = a.getAttribute('href').slice(1);
+    var doc = a.dataset.doc || (id.indexOf('fw-') === 0 ? 'fw' : id.indexOf('co-') === 0 ? 'co' : null);
+    if (!doc) return;
+    e.preventDefault();
+    show(doc, false);
+    var el = document.getElementById(id === 'framework' || id === 'constitution' ? 'documents' : id);
+    if (el) el.scrollIntoView();
+    if (window.matchMedia('(max-width:900px)').matches && a.closest('.toc')) a.closest('details').open = false;
+  });
+  var h = location.hash.slice(1);
+  if (h === 'constitution' || h.indexOf('co-') === 0) show('co', false);
+
+  // mobile: contents collapsed by default
+  if (window.matchMedia('(max-width:900px)').matches) document.querySelectorAll('.toc details').forEach(function(d){ d.open = false; });
+
+  // highlight current section in contents
+  var io;
+  function watch(){
+    if (!('IntersectionObserver' in window)) return;
+    if (io) io.disconnect();
+    var panel = document.querySelector('[role=tabpanel]:not([hidden])');
+    var links = panel.querySelectorAll('.toc a');
+    var map = {};
+    links.forEach(function(l){ map[l.getAttribute('href').slice(1)] = l; });
+    io = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if (en.isIntersecting && map[en.target.id]) {
+          links.forEach(function(l){ l.classList.remove('on'); });
+          map[en.target.id].classList.add('on');
+        }
+      });
+    }, { rootMargin: '-80px 0px -70% 0px' });
+    Object.keys(map).forEach(function(id){ var el = document.getElementById(id); if (el) io.observe(el); });
+  }
+  watch();
+
+  // copy link
+  var toast = document.getElementById('toast'), tt;
+  function say(msg){ toast.textContent = msg; toast.hidden = false; clearTimeout(tt); tt = setTimeout(function(){ toast.hidden = true; }, 1800); }
+  document.getElementById('copy-form').addEventListener('click', function(){
+    var text = this.dataset.copy;
+    function fallback(){
+      var r = document.createRange(); r.selectNodeContents(document.getElementById('form-url'));
+      var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      say('Link selected — press Ctrl+C to copy');
+    }
+    try {
+      navigator.clipboard.writeText(text).then(function(){ say('Form link copied'); }, fallback);
+    } catch (e) { fallback(); }
+  });
+})();
+</script>
