@@ -179,3 +179,16 @@ const head = `<!doctype html>
 `;
 fs.writeFileSync(path.join(dir, '..', 'index.html'), head + out.replace('<title>W/Rhinos Cycling Club</title>\n', '').replace('</style>', '</style>\n</head>\n<body>') + '\n</body>\n</html>\n');
 console.log('framework blocks', blocks.length, 'headings matched', ti, '/', toc.length, 'signers', signers.length, 'bytes', out.length);
+
+// ---------- Privacy notice page ----------
+const style = tpl.match(/<link rel="stylesheet"[^>]*>\s*<style>[\s\S]*?<\/style>/)[0];
+const privacyBody = fs.readFileSync(path.join(dir, 'privacy.html'), 'utf8');
+const privacyHead = head
+  .replace('<title>W/Rhinos Cycling Club</title>', '<title>W/Rhinos Privacy Notice</title>')
+  .replace('href="img/favicon.png"', 'href="/img/favicon.png"')
+  .replace('href="img/badge.png"', 'href="/img/badge.png"')
+  .replace(/<meta name="description" content="[^"]*">/, '<meta name="description" content="How W/Rhinos Cycling Club looks after members\' personal information.">')
+  .replace('content="https://wrhinos.com/"', 'content="https://wrhinos.com/privacy/"');
+fs.mkdirSync(path.join(dir, '..', 'privacy'), { recursive: true });
+fs.writeFileSync(path.join(dir, '..', 'privacy', 'index.html'), privacyHead + style + '\n</head>\n<body>\n' + privacyBody + '\n</body>\n</html>\n');
+console.log('privacy page written');

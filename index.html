@@ -14,9 +14,7 @@
 <meta property="og:type" content="website">
 <meta name="theme-color" content="#161616">
 <style>[hidden]{display:none!important}body{margin:0}img{max-width:100%}</style>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+<link rel="stylesheet" href="/fonts/fonts.css">
 <style>
 :root{
   --ground:#F3F3F2; --surface:#FFFFFF; --ink:#1A1A1A; --muted:#5E5E5E; --rule:#DADADA;
@@ -200,6 +198,16 @@ section.block{padding-block:64px}
 .founders{list-style:none; margin:0 0 28px; padding:0; display:flex; flex-wrap:wrap; gap:8px}
 .founders li{background:var(--surface); border:1px solid var(--rule); border-radius:999px; padding:6px 14px; font-weight:600; font-size:15px}
 .committee .officers{display:grid; grid-template-columns:repeat(auto-fill, minmax(200px,1fr))}
+/* privacy page */
+.page-title{font-family:var(--display); font-stretch:75%; font-weight:850; font-size:clamp(44px, 7vw, 72px); line-height:.95; text-transform:uppercase; margin:0 0 12px}
+.eyebrow-dark{font-size:13px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); margin:0 0 10px}
+.privacy h2{font-family:var(--sans); font-stretch:100%; font-size:24px; font-weight:750; text-transform:none; border-top:1px solid var(--rule); padding-top:28px; margin:40px 0 14px}
+.privacy h2:first-child{margin-top:0}
+.table-wrap{overflow-x:auto; margin:0 0 1.2em}
+.privacy table{border-collapse:collapse; font-family:var(--sans); font-size:15px; line-height:1.45; min-width:560px}
+.privacy th{text-align:left; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); padding:8px 12px 8px 0; border-bottom:2px solid var(--ink)}
+.privacy td{vertical-align:top; padding:12px 12px 12px 0; border-bottom:1px solid var(--rule)}
+@media (max-width:720px){ .bar .plain-nav{display:none} }
 footer{background:var(--band); color:var(--band-muted); padding-block:32px; font-size:14px}
 footer .wrap{display:flex; flex-wrap:wrap; gap:10px 32px; justify-content:space-between}
 footer a{color:var(--band-ink)}
@@ -354,7 +362,7 @@ footer a{color:var(--band-ink)}
 <footer>
   <div class="wrap">
     <span>W/Rhinos Cycling Club · Birmingham</span>
-    <span><a href="https://forms.gle/cbHLRxi53QGC8Hys6" target="_blank" rel="noopener">Membership form</a> · <a href="#framework" data-doc="fw">Framework</a> · <a href="#constitution" data-doc="co">Constitution</a></span>
+    <span><a href="https://forms.gle/cbHLRxi53QGC8Hys6" target="_blank" rel="noopener">Membership form</a> · <a href="#framework" data-doc="fw">Framework</a> · <a href="#constitution" data-doc="co">Constitution</a> · <a href="/privacy/">Privacy notice</a></span>
   </div>
 </footer>
 <div class="toast" id="toast" role="status" hidden></div>

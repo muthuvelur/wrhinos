@@ -7,6 +7,8 @@ Live: https://muthuvelur.github.io/wrhinos/ (GitHub Pages, served from `main`).
 ## Editing
 
 - Page layout, text and links: `src/template.html`
+- Privacy notice text: `src/privacy.html` (published at /privacy/)
+- Fonts are self-hosted in `fonts/` (no Google Fonts requests)
 - Document text: extracted from `source-docs/` into `src/framework.txt` and `src/constitution.xml`
 - Rebuild `index.html`: `node src/build.js`
 
