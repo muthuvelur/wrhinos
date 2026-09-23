@@ -63,7 +63,13 @@ a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid var
 .hero-lead{font-family:var(--serif); font-size:18px; line-height:1.6; color:var(--band-ink); opacity:.88; max-width:56ch; margin:26px 0 30px}
 .hero-actions{display:flex; flex-wrap:wrap; gap:12px}
 .hero-grid{display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:48px; align-items:end}
-.name-note{border-left:2px solid var(--mark); padding-left:16px; font-size:14px; color:var(--band-muted); line-height:1.55}
+.wordmark{display:inline-flex; align-items:center; gap:10px}
+.wordmark img{border-radius:50%; display:block}
+.hero-side{display:flex; flex-direction:column; gap:24px}
+.badge{width:100%; max-width:260px; height:auto; display:block; filter:drop-shadow(0 8px 24px rgba(0,0,0,.45))}
+@media (max-width:860px){ .hero-side{flex-direction:row; align-items:center} .badge{max-width:120px; flex:none} }
+@media (max-width:480px){ .hero-side{flex-direction:column; align-items:flex-start} }
+.name-note{margin:0; border-left:2px solid var(--mark); padding-left:16px; font-size:14px; color:var(--band-muted); line-height:1.55}
 .name-note b{color:var(--band-ink); font-weight:600}
 @media (max-width:860px){ .hero-grid{grid-template-columns:1fr; gap:32px} }
 
@@ -174,7 +180,7 @@ footer a{color:var(--band-ink)}
 
 <header class="bar">
   <div class="wrap">
-    <a class="wordmark" href="#top">W<span class="slash">/</span>Rhinos</a>
+    <a class="wordmark" href="#top"><img src="img/badge.png" alt="" width="34" height="34">W<span class="slash">/</span>Rhinos</a>
     <nav aria-label="Sections">
       <a href="#join">How to join</a>
       <a href="#glance">At a glance</a>
@@ -199,8 +205,8 @@ footer a{color:var(--band-ink)}
           <a class="btn btn-line" href="#framework" data-doc="fw">Read the Framework</a>
         </div>
       </div>
-      <aside class="name-note">
-        <b>Why “W/Rhinos”?</b> It began as an affectionate nickname — the <b>whining rhinos</b>, forever grumbling about hills and headwinds before getting on with it. We write it WRhinos where a form objects to punctuation.
+      <aside class="hero-side"><img class="badge" src="img/badge.png" alt="W/Rhinos Cycling Club badge: a rhino in club kit riding a road bike" width="260" height="260"><p class="name-note">
+        <b>Why “W/Rhinos”?</b> It began as an affectionate nickname — the <b>whining rhinos</b>, forever grumbling about hills and headwinds before getting on with it. We write it WRhinos where a form objects to punctuation.</p>
       </aside>
     </div>
   </section>

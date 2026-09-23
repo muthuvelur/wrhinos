@@ -166,7 +166,16 @@ const head = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="W/Rhinos Cycling Club, Birmingham. How to join, the Framework and the Constitution.">
+<title>W/Rhinos Cycling Club</title>
+<link rel="icon" type="image/png" href="img/favicon.png">
+<link rel="apple-touch-icon" href="img/badge.png">
+<meta property="og:title" content="W/Rhinos Cycling Club">
+<meta property="og:description" content="Freedom through Responsibility. Adventure through Community. How to join, plus the Framework and Constitution.">
+<meta property="og:image" content="https://wrhinos.com/img/badge.png">
+<meta property="og:url" content="https://wrhinos.com/">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#161616">
 <style>[hidden]{display:none!important}body{margin:0}img{max-width:100%}</style>
 `;
-fs.writeFileSync(path.join(dir, '..', 'index.html'), head + out.replace('</style>', '</style>\n</head>\n<body>') + '\n</body>\n</html>\n');
+fs.writeFileSync(path.join(dir, '..', 'index.html'), head + out.replace('<title>W/Rhinos Cycling Club</title>\n', '').replace('</style>', '</style>\n</head>\n<body>') + '\n</body>\n</html>\n');
 console.log('framework blocks', blocks.length, 'headings matched', ti, '/', toc.length, 'signers', signers.length, 'bytes', out.length);
