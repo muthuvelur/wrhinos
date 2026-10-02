@@ -76,6 +76,7 @@
     mon = null;
     closeEditor();
     $('callForm').hidden = true;
+    $('groupMsgCard').hidden = true;
     $('oDates').textContent = current.datesText;
     $('oName').textContent = current.name;
     $('oStatus').textContent = current.status;
@@ -637,27 +638,70 @@
         '<div class="field"><label for="cfReason">Reason</label><input type="text" id="cfReason" placeholder="e.g. Hotels need paying 6 weeks before we go"></div>'
       : '<p class="small" style="margin:0">Do this after the trip, once every cost is entered. Everyone is asked for their full share less what they have paid. You can still add or change expenses afterwards; balances update.</p>' +
         '<div class="field"><label for="cfDue">Due by</label><input type="date" id="cfDue" value="' + nextMonth + '"></div>') +
-      '<label class="check"><input type="checkbox" id="cfEmail" checked>Email everyone who owes, with their amount and the bank details</label>' +
+      '<fieldset class="stack"><legend class="label" style="font-weight:600">Then</legend>' +
+      '<label class="check"><input type="radio" name="cfHow" value="group" checked>Write a message I can post in the WhatsApp group</label>' +
+      '<label class="check"><input type="radio" name="cfHow" value="email">Email everyone who owes their own amount and the bank details</label></fieldset>' +
       '<div class="error" id="cfError" hidden></div>' +
       '<div class="row"><button type="submit" class="btn btn-primary">' + (stage === 'Interim' ? 'Call interim payment' : 'Call final balance') + '</button><button type="button" class="btn btn-line" id="cfCancel">Cancel</button></div>';
     f.hidden = false;
     f.dataset.stage = stage;
     $('cfCancel').addEventListener('click', function () { f.hidden = true; });
   }
+  // ---------- WhatsApp group message ----------
+  // One message for the whole group: amounts per person and the club account, never anyone's own balance.
+  function groupMessage(call) {
+    var bank = mon.bank || {};
+    var due = call && call.dueDate ? T.niceDate(call.dueDate) : '';
+    var lines = ['W/Rhinos – ' + current.name, ''];
+    if (call && call.stage === 'Interim') {
+      lines.push('Interim payment due: ' + T.money(call.perPerson) + ' per person' + (due ? ', by ' + due : '') + '.',
+        'Why: ' + call.reason.replace(/\.$/, '') + '.', '(Support crew: nothing to pay.)');
+    } else if (call && call.stage === 'Final') {
+      lines.push('Thank you all for a brilliant trip! Every cost is now in, and the final balances are ready.',
+        'Please pay your balance' + (due ? ' by ' + due : '') + '. Your booking page shows your share of each cost and exactly what is left to pay.');
+    } else {
+      lines.push('Friendly reminder: if your booking still owes money' + (due ? ' (due by ' + due + ')' : '') + ', please pay as soon as you can.',
+        'Your booking page shows exactly what your booking owes.');
+    }
+    lines.push('', 'Pay by bank transfer:',
+      'Account name: ' + (bank.accountName || ''),
+      'Sort code: ' + (bank.sortCode || ''),
+      'Account number: ' + (bank.accountNumber || ''),
+      'Reference: your booking reference (the 5 letters in your registration email)',
+      '', 'Once you have paid, open your booking page and tap "I\'ve paid" so we can check it.',
+      'Lost your booking link? Get it again at ' + location.origin + '/trips/ ("Lost your booking link?").');
+    return lines.join('\n');
+  }
+  function showGroupMessage(text) {
+    $('groupMsg').value = text;
+    $('waGroupMsg').href = 'https://wa.me/?text=' + encodeURIComponent(text);
+    $('groupMsgCard').hidden = false;
+    $('groupMsgCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  $('groupMsg').addEventListener('input', function () { $('waGroupMsg').href = 'https://wa.me/?text=' + encodeURIComponent(this.value); });
+  $('copyGroupMsg').addEventListener('click', function () { T.copy($('groupMsg').value, this); });
+  $('closeGroupMsg').addEventListener('click', function () { $('groupMsgCard').hidden = true; });
+  $('groupReminder').addEventListener('click', function () {
+    var last = mon.calls.length ? mon.calls[mon.calls.length - 1] : null;
+    showGroupMessage(groupMessage(last ? { stage: 'Reminder', dueDate: last.dueDate } : null));
+  });
+
   $('callInterim').addEventListener('click', function () { callForm('Interim'); });
   $('callFinal').addEventListener('click', function () { callForm('Final'); });
   $('callForm').addEventListener('submit', function (e) {
     e.preventDefault();
     var f = this, stage = f.dataset.stage;
-    var body = { tripId: current.id, stage: stage, dueDate: $('cfDue').value, email: $('cfEmail').checked };
+    var how = (f.querySelector('[name=cfHow]:checked') || {}).value;
+    var body = { tripId: current.id, stage: stage, dueDate: $('cfDue').value, email: how === 'email' };
     if (stage === 'Interim') { body.perPerson = Number(String($('cfPer').value).replace(/[£,\s]/g, '')); body.reason = $('cfReason').value.trim(); }
     var btn = f.querySelector('[type=submit]');
     btn.disabled = true;
     admin('call', body).then(function (r) {
       if (!r.ok) { T.errorBox($('cfError'), [r.error]); return; }
       f.hidden = true;
-      T.toast((stage === 'Final' ? 'Final balance called' : 'Interim payment called') + (T.DEMO ? ' (preview: no emails sent)' : ', ' + r.emailed + ' emails sent'));
-      return loadMoney();
+      T.toast((stage === 'Final' ? 'Final balance called' : 'Interim payment called') +
+        (how === 'email' ? (T.DEMO ? ' (preview: no emails sent)' : ', ' + r.emailed + ' emails sent') : ''));
+      return loadMoney().then(function () { if (how === 'group') showGroupMessage(groupMessage(body)); });
     }).catch(function () { /* */ }).then(function () { btn.disabled = false; });
   });
 

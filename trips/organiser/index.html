@@ -82,9 +82,20 @@
         </div>
         <form id="callForm" class="stack" hidden novalidate></form>
       </div>
+      <div class="card stack" id="groupMsgCard" hidden>
+        <h2 class="section-title">Message for the WhatsApp group</h2>
+        <p class="small muted" style="margin:0">Check it, change anything you like, then copy it into the group.</p>
+        <textarea id="groupMsg" rows="14" style="font-size:15px"></textarea>
+        <div class="row">
+          <button type="button" class="btn btn-primary" id="copyGroupMsg">Copy message</button>
+          <a class="btn btn-line" id="waGroupMsg" target="_blank" rel="noopener" href="#">Open WhatsApp</a>
+          <button type="button" class="linkbtn" id="closeGroupMsg">Close</button>
+        </div>
+      </div>
       <div class="card stack">
         <div class="row" style="justify-content:space-between"><h2 class="section-title">Who owes what</h2>
-          <button type="button" class="btn btn-primary btn-small" id="remindAll">Email everyone who owes</button></div>
+          <span class="row"><button type="button" class="btn btn-line btn-small" id="groupReminder">Message for the group</button>
+          <button type="button" class="btn btn-primary btn-small" id="remindAll">Email everyone who owes</button></span></div>
         <p class="small muted" style="margin:0" id="monNote"></p>
         <div id="balanceList" class="stack"></div>
       </div>

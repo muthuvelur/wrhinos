@@ -341,7 +341,7 @@
             t = db.trips.filter(function (x) { return x.id === body.tripId; })[0];
             if (body.op === 'money') {
               var live = {}; db.bookings.forEach(function (x) { if (x.tripId === t.id && x.status === 'Booked') live[x.ref] = 1; });
-              return { ok: true, result: tripMoney(db, t), expenses: db.expenses.filter(function (e) { return e.tripId === t.id; }), calls: db.calls.filter(function (c) { return c.tripId === t.id; }),
+              return { ok: true, result: tripMoney(db, t), bank: bank, expenses: db.expenses.filter(function (e) { return e.tripId === t.id; }), calls: db.calls.filter(function (c) { return c.tripId === t.id; }),
                 people: flatPeople(db, t.id).filter(function (p) { return live[p.ref]; }).map(function (p) { return { key: window.Money.personKey(p.ref, p.n), ref: p.ref, n: p.n, name: p.fullName, role: p.role, bikeType: p.bikeType, under18: p.under18 }; }),
                 bookings: db.bookings.filter(function (x) { return x.tripId === t.id; }).map(function (x) { return { ref: x.ref, status: x.status, leadName: x.leadName, email: x.email, mobile: x.mobile, link: link(x) }; }) };
             }

@@ -896,7 +896,7 @@ function admin_(input) {
       const live = {};
       m.bookings.forEach(function (b) { if (b.status === 'Booked') live[b.ref] = b; });
       return {
-        ok: true, result: m.result,
+        ok: true, result: m.result, bank: bank_(cfg),
         expenses: m.expenses.map(function (e) { return { id: e.id, name: e.name, split: e.split, amount: Number(e.amount), detail: Money.parseDetail(e.detail), date: e.date, paidBy: e.paidBy, notes: e.notes }; }),
         calls: m.calls.map(function (c) { return { id: c.id, stage: c.stage, reason: c.reason, perPerson: Number(c.perPerson) || 0, dueDate: c.dueDate, createdAt: c.createdAt, emailed: c.emailed }; }),
         people: m.people.filter(function (p) { return live[p.ref]; }).map(function (p) {
