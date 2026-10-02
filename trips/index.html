@@ -42,6 +42,14 @@
       <div id="mineList" class="stack"></div>
     </div>
     <div id="tripList" class="trips"></div>
+    <form class="card stack" id="lostForm" novalidate>
+      <h2 class="section-title" id="lost">Lost your booking link?</h2>
+      <p class="small" style="margin:0">Enter the email you registered with and we’ll email your booking link to you.</p>
+      <div class="field"><label for="lostEmail" class="sr">Email</label><input type="email" id="lostEmail" autocomplete="email" placeholder="you@example.com"></div>
+      <div class="error" id="lostError" hidden></div>
+      <div class="success" id="lostDone" hidden></div>
+      <button type="submit" class="btn btn-line" id="lostBtn">Email me my link</button>
+    </form>
   </section>
 
   <!-- one trip -->
@@ -168,6 +176,7 @@
 </div>
 
 <script src="/trips/config.js"></script>
+<script src="/trips/money.js"></script>
 <script src="/trips/common.js"></script>
 <script src="/trips/trip.js"></script>
 </body>

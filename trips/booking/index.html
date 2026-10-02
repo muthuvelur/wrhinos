@@ -41,11 +41,13 @@
     <div class="card stack" id="moneyCard">
       <h2 class="section-title">Payments</h2>
       <div class="money">
-        <div><b id="mDue"></b><span>Deposit due</span></div>
+        <div><b id="mDue"></b><span id="mDueLabel">Due so far</span></div>
         <div><b id="mPaid"></b><span>Paid and checked</span></div>
-        <div><b id="mClaimed"></b><span>Waiting to be checked</span></div>
+        <div><b id="mOwes"></b><span id="mOwesLabel">To pay now</span></div>
       </div>
+      <div id="callNotes" class="stack"></div>
       <p class="small muted" style="margin:0" id="moneyNote"></p>
+      <details class="more" id="breakdown" hidden><summary>Where the money goes</summary><div class="stack" id="breakdownBody"></div></details>
       <div class="table-wrap" id="paymentsWrap" hidden>
         <table class="plain"><thead><tr><th scope="col">Paid on</th><th scope="col">For</th><th scope="col">Amount</th><th scope="col">Status</th></tr></thead><tbody id="payments"></tbody></table>
       </div>
@@ -130,6 +132,7 @@
 </main>
 
 <script src="/trips/config.js"></script>
+<script src="/trips/money.js"></script>
 <script src="/trips/common.js"></script>
 <script src="/trips/booking/booking.js"></script>
 </body>

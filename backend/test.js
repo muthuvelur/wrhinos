@@ -184,6 +184,27 @@ test('emails: deposit details when booked, none when waiting', () => {
   assert.ok(/WAITING LIST/.test(waiting.body) && !/PAYMENT REFERENCE/.test(waiting.body));
 });
 
+test('payment call emails: interim states the reason, final states the totals', () => {
+  const cfg = { clubName: 'W/Rhinos Cycling Club', bankAccountName: 'W/Rhinos', bankSortCode: '12-34-56', bankAccountNumber: '12345678' };
+  const b = { ref: 'RAKIM', leadName: 'Asha Rider' };
+  const row = { cost: 862.53, confirmed: 300, owesNow: 562.53 };
+  const interim = C.buildCallEmail_(b, row, { stage: 'Interim', reason: 'Hotels need paying 6 weeks before', perPerson: 200, dueDate: '2027-04-01' }, trip, cfg, 'https://x');
+  assert.ok(/Hotels need paying/.test(interim.body) && /PLEASE PAY £562\.53 BY 2027-04-01/.test(interim.body) && /PAYMENT REFERENCE: RAKIM/.test(interim.body));
+  const fin = C.buildCallEmail_(b, row, { stage: 'Final', dueDate: '2027-06-30' }, trip, cfg, 'https://x');
+  assert.ok(/Final balance/.test(fin.subject) && /Total cost for your booking: £862\.53/.test(fin.body) && /Already paid: £300/.test(fin.body));
+  const rem = C.buildReminderEmail_(b, row, trip, cfg, 'https://x');
+  assert.ok(/£562\.53 is due/.test(rem.body));
+  const links = C.buildLinksEmail_([{ ref: 'RAKIM', trip: 'Rhine', link: 'https://a' }, { ref: 'BOLAN', trip: 'Lakes', link: 'https://b' }], cfg);
+  assert.ok(/links/.test(links.subject) && /https:\/\/a/.test(links.body) && /https:\/\/b/.test(links.body));
+});
+
+test('trip charity fee defaults to £50 and is checked', () => {
+  const base = { name: 'Rhine', datesText: 'May', startDate: '2027-05-28', places: 50, depositPerPerson: 100, depositDays: 7 };
+  assert.strictEqual(C.validateTrip_(base).value.charityFee, 50);
+  assert.strictEqual(C.validateTrip_(Object.assign({}, base, { charityFee: '0' })).value.charityFee, 0);
+  assert.ok(C.validateTrip_(Object.assign({}, base, { charityFee: '-5' })).errors.length);
+});
+
 test('settings: example bank details and short passcode are flagged', () => {
   let s = C.parseSettings_({ clubName: 'W', contactEmail: 'a@b.co', siteUrl: 'https://wrhinos.com', bankAccountName: 'W', bankSortCode: '00-00-00', bankAccountNumber: '00000000', organiserPasscode: 'short' });
   assert.ok(s.problems.some((p) => /example/.test(p)));

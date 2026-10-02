@@ -40,6 +40,7 @@ const SEED_TRIP = {
   detailsUrl: 'https://wrhinos.com/trips/content/rhine-2027.md',
   routes: 'Day 1: Frankfurt – St Goar | \nDay 2: St Goar – Bonn | \nDay 3: Bonn – Düsseldorf | ',
   organiser: 'Ram Sugavanam',
+  charityFee: 50,
 };
 
 const TABLES = {
@@ -47,7 +48,16 @@ const TABLES = {
     ['id', 'Trip ID'], ['name', 'Trip name'], ['status', 'Status'], ['datesText', 'Dates'], ['startDate', 'Start date'],
     ['places', 'Places'], ['depositPerPerson', 'Deposit per person (£)'], ['depositDays', 'Days to pay deposit'],
     ['summary', 'One-line summary'], ['details', 'Trip details'], ['routes', 'Route links'], ['organiser', 'Organiser'],
+    ['createdAt', 'Created'], ['updatedAt', 'Updated'], ['charityFee', 'Charity fee per rider (£)'],
+  ],
+  Expenses: [
+    ['id', 'Expense ID'], ['tripId', 'Trip ID'], ['name', 'Expense'], ['split', 'How shared'], ['amount', 'Amount (£)'],
+    ['detail', 'Split details (do not edit)'], ['date', 'Date'], ['paidBy', 'Paid by'], ['notes', 'Notes'],
     ['createdAt', 'Created'], ['updatedAt', 'Updated'],
+  ],
+  Calls: [
+    ['id', 'Call ID'], ['tripId', 'Trip ID'], ['stage', 'Stage'], ['reason', 'Reason'], ['perPerson', 'Per person (£)'],
+    ['dueDate', 'Due by'], ['createdAt', 'Called on'], ['emailed', 'Emails sent'],
   ],
   Bookings: [
     ['ref', 'Reference'], ['tripId', 'Trip ID'], ['status', 'Status'], ['bookedAt', 'Booked at'], ['leadName', 'Booked by'],
@@ -173,8 +183,10 @@ function validateTrip_(input, existingIds) {
     details: cleanMulti_(input.details, 40000),
     routes: cleanMulti_(input.routes, 5000),
     organiser: clean_(input.organiser, 80),
+    charityFee: input.charityFee === undefined || input.charityFee === '' ? 50 : Number(input.charityFee),
   };
   if (t.name.length < 3) errors.push('Give the trip a name.');
+  if (isNaN(t.charityFee) || t.charityFee < 0 || t.charityFee > 500) errors.push('The charity fee per rider must be from £0 to £500.');
   if (!t.datesText) errors.push('Enter the dates, e.g. Fri 28 May – Wed 2 June 2027.');
   if (!t.startDate) errors.push('Enter the first day of the trip (used to work out who is under 18).');
   if (!Number.isInteger(t.places) || t.places < 1 || t.places > 500) errors.push('Places must be a whole number from 1 to 500.');
@@ -182,6 +194,7 @@ function validateTrip_(input, existingIds) {
   if (!Number.isInteger(t.depositDays) || t.depositDays < 1 || t.depositDays > 60) errors.push('Days to pay the deposit must be from 1 to 60.');
   if (t.id && existingIds && !existingIds[t.id]) errors.push('That trip no longer exists. Reload the organiser page.');
   t.depositPerPerson = round2_(t.depositPerPerson || 0);
+  t.charityFee = round2_(t.charityFee || 0);
   return { errors: errors, value: t };
 }
 
@@ -373,6 +386,54 @@ function buildPlaceOfferedEmail_(b, trip, cfg, link) {
   };
 }
 
+function payLines_(amount, ref, cfg) {
+  return ['  Amount:            ' + money_(amount),
+    '  Account name:      ' + cfg.bankAccountName,
+    '  Sort code:         ' + cfg.bankSortCode,
+    '  Account number:    ' + cfg.bankAccountNumber,
+    '  PAYMENT REFERENCE: ' + ref];
+}
+
+// Sent to each booking that owes money when the organiser calls an interim payment or the final balance.
+function buildCallEmail_(b, row, call, trip, cfg, link) {
+  const final = call.stage === 'Final';
+  const lines = ['Hello ' + String(b.leadName).split(' ')[0] + ',', ''];
+  if (final) {
+    lines.push('Thank you for riding ' + trip.name + '. All the costs are now in, and your final balance is ready.', '',
+      'Total cost for your booking: ' + money_(row.cost), 'Already paid: ' + money_(row.confirmed));
+  } else {
+    lines.push('An interim payment is now due for ' + trip.name + '.', '', 'Why: ' + call.reason, money_(call.perPerson) + ' per person.');
+  }
+  lines.push('', 'PLEASE PAY ' + money_(row.owesNow) + (call.dueDate ? ' BY ' + call.dueDate : '') + ', BY BANK TRANSFER');
+  return {
+    subject: (final ? 'Final balance: ' : 'Payment due: ') + trip.name + ' (' + b.ref + ')',
+    body: lines.concat(payLines_(row.owesNow, b.ref, cfg), ['',
+      'Your booking page shows exactly what each cost was and your share of it:', link, '',
+      'Once you have paid, tap "I\'ve paid" on that page.', '', cfg.clubName]).join('\n'),
+  };
+}
+
+function buildReminderEmail_(b, row, trip, cfg, link) {
+  return {
+    subject: 'Reminder: payment due for ' + trip.name + ' (' + b.ref + ')',
+    body: ['Hello ' + String(b.leadName).split(' ')[0] + ',', '',
+      'A friendly reminder that ' + money_(row.owesNow) + ' is due for your booking on ' + trip.name + '.', '']
+      .concat(payLines_(row.owesNow, b.ref, cfg), ['',
+        'If you have already paid, tap "I\'ve paid" on your booking page so we can match it:', link, '',
+        'Any questions, just reply to this email.', '', cfg.clubName]).join('\n'),
+  };
+}
+
+function buildLinksEmail_(list, cfg) {
+  return {
+    subject: 'Your W/Rhinos booking link' + (list.length > 1 ? 's' : ''),
+    body: ['Hello,', '', 'Here ' + (list.length > 1 ? 'are your booking links' : 'is your booking link') + ', as requested:', '']
+      .concat(list.map(function (x) { return x.trip + ' (' + x.ref + ')\n' + x.link + '\n'; }), [
+        'Keep this email so you can find your booking again. Anyone with the link can see your booking, so please do not share it.', '',
+        'If you did not ask for this, you can ignore this email.', '', cfg.clubName]).join('\n'),
+  };
+}
+
 function parseSettings_(vals) {
   const problems = [];
   const cfg = {};
@@ -427,8 +488,24 @@ function sheet_(name) {
     sh.getRange(1, 1, 1, S.headers.length).setValues([S.headers]).setFontWeight('bold').setBackground('#161616').setFontColor('#ffffff');
     sh.setFrozenRows(1);
     sh.getRange(2, 1, sh.getMaxRows() - 1, S.headers.length).setNumberFormat('@');
+  } else if (sh.getLastColumn() < S.headers.length) {
+    // A newer version of this script added columns at the end: add their headings, keep everything else.
+    const from = sh.getLastColumn() + 1;
+    sh.getRange(1, from, 1, S.headers.length - from + 1).setValues([S.headers.slice(from - 1)])
+      .setFontWeight('bold').setBackground('#161616').setFontColor('#ffffff');
+    sh.getRange(2, from, sh.getMaxRows() - 1, S.headers.length - from + 1).setNumberFormat('@');
   }
   return sh;
+}
+
+// Everything money for one trip, worked out by Money.gs (the same code the website uses).
+function tripMoney_(trip) {
+  const id = trip.id;
+  const of = function (name) { return readTable_(name).filter(function (x) { return x.tripId === id; }); };
+  const bookings = of('Bookings'), people = of('People'), payments = of('Payments'), expenses = of('Expenses'), calls = of('Calls');
+  const t = { charityFee: trip.charityFee === '' || trip.charityFee === undefined ? 50 : Number(trip.charityFee) };
+  return { bookings: bookings, people: people, payments: payments, expenses: expenses, calls: calls,
+    result: Money.balances(t, bookings, people, payments, expenses, calls) };
 }
 
 function readTable_(name) {
@@ -487,6 +564,7 @@ function publicTrip_(t, bookings) {
     id: t.id, name: t.name, status: t.status, datesText: t.datesText, startDate: t.startDate,
     places: Number(t.places), placesLeft: left, depositPerPerson: Number(t.depositPerPerson), depositDays: Number(t.depositDays),
     summary: t.summary, details: t.details, routes: parseRoutes_(t.routes), organiser: t.organiser,
+    charityFee: t.charityFee === '' || t.charityFee === undefined ? 50 : Number(t.charityFee),
     waiting: bookings.filter(function (b) { return b.tripId === t.id && b.status === 'Waiting list'; }).length,
   };
 }
@@ -527,6 +605,7 @@ function doPost(e) {
       case 'booking': return json_(getBooking_(body));
       case 'claim': return json_(claimPayment_(body));
       case 'update': return json_(updateBooking_(body));
+      case 'resend': return json_(resendLinks_(body));
       case 'admin': return json_(admin_(body));
       default: return json_({ ok: false, error: 'Unknown request.' });
     }
@@ -620,8 +699,18 @@ function bookingView_(b) {
     'emergencyRelation', 'emergencyMobile', 'people', 'depositDue', 'roomRequests', 'notes'].forEach(function (k) { booking[k] = b[k]; });
   booking.people = Number(b.people);
   booking.depositDue = Number(b.depositDue);
+  let money = null;
+  if (trip) {
+    const m = tripMoney_(trip);
+    const row = m.result.bookings.filter(function (x) { return x.ref === b.ref; })[0];
+    money = {
+      row: row, finalCalled: m.result.finalCalled, charityFee: Number(trip.charityFee === '' ? 50 : trip.charityFee),
+      calls: m.calls.map(function (c) { return { stage: c.stage, reason: c.reason, perPerson: Number(c.perPerson) || 0, dueDate: c.dueDate, createdAt: c.createdAt }; }),
+      expenses: m.result.expenses.map(function (e) { return { id: e.id, name: e.name, total: e.total, describe: e.describe }; }),
+    };
+  }
   return {
-    ok: true, booking: booking, people: people, payments: payments, totals: totals, bank: bank_(cfg),
+    ok: true, booking: booking, people: people, payments: payments, totals: totals, bank: bank_(cfg), money: money,
     trip: trip ? { id: trip.id, name: trip.name, datesText: trip.datesText, startDate: trip.startDate, depositDays: Number(trip.depositDays), status: trip.status, routes: parseRoutes_(trip.routes) } : null,
   };
 }
@@ -661,6 +750,25 @@ function updateBooking_(input) {
     updateRow_('People', row._row, p);
   });
   return bookingView_(Object.assign(nb, { _row: b._row }));
+}
+
+// "Lost your link?": email every booking link for that address. The reply never says whether the address is booked,
+// and each address can ask once every 10 minutes, so it can't be used to find out who is going or to spam someone.
+function resendLinks_(input) {
+  const email = clean_(input.email, 120).toLowerCase();
+  const done = { ok: true, message: 'If that email has a booking, we have sent the link to it. Check your inbox (and spam folder) in a few minutes.' };
+  if (!isEmail_(email) || input.website) return { ok: false, error: 'Enter the email address you registered with.' };
+  const cache = CacheService.getScriptCache();
+  const key = 'resend:' + email;
+  if (cache.get(key)) return done;
+  cache.put(key, '1', 600);
+  const cfg = settings_();
+  const trips = {};
+  readTable_('Trips').forEach(function (t) { trips[t.id] = t; });
+  const list = readTable_('Bookings').filter(function (b) { return String(b.email).toLowerCase() === email && b.status !== 'Cancelled'; })
+    .map(function (b) { return { ref: b.ref, trip: trips[b.tripId] ? trips[b.tripId].name : 'Trip', link: bookingLink_(cfg.siteUrl, b.ref, b.token) }; });
+  if (list.length) sendMail_(email, buildLinksEmail_(list, cfg));
+  return done;
 }
 
 // ---------- organiser ----------
@@ -781,6 +889,84 @@ function admin_(input) {
       updateRow_('Bookings', b._row, Object.assign({}, b, { organiserNotes: clean_(input.notes, 1000) }));
       return { ok: true };
     }
+    case 'money': {
+      const trip = tripById_(String(input.tripId || ''));
+      if (!trip) return { ok: false, error: 'Trip not found.' };
+      const m = tripMoney_(trip);
+      const live = {};
+      m.bookings.forEach(function (b) { if (b.status === 'Booked') live[b.ref] = b; });
+      return {
+        ok: true, result: m.result,
+        expenses: m.expenses.map(function (e) { return { id: e.id, name: e.name, split: e.split, amount: Number(e.amount), detail: Money.parseDetail(e.detail), date: e.date, paidBy: e.paidBy, notes: e.notes }; }),
+        calls: m.calls.map(function (c) { return { id: c.id, stage: c.stage, reason: c.reason, perPerson: Number(c.perPerson) || 0, dueDate: c.dueDate, createdAt: c.createdAt, emailed: c.emailed }; }),
+        people: m.people.filter(function (p) { return live[p.ref]; }).map(function (p) {
+          return { key: Money.personKey(p.ref, p.n), ref: p.ref, n: Number(p.n), name: p.fullName, role: p.role, bikeType: p.bikeType, under18: p.under18 };
+        }),
+        bookings: m.bookings.map(function (b) { return { ref: b.ref, status: b.status, leadName: b.leadName, email: b.email, mobile: b.mobile, link: bookingLink_(cfg.siteUrl, b.ref, b.token) }; }),
+      };
+    }
+    case 'saveExpense': {
+      const trip = tripById_(String(input.tripId || ''));
+      if (!trip) return { ok: false, error: 'Trip not found.' };
+      const v = Money.validateExpense(input.expense);
+      if (v.errors.length) return { ok: false, error: v.errors.join(' ') };
+      const e = v.value;
+      const now = new Date().toISOString();
+      const row = Object.assign({}, e, { tripId: trip.id, detail: JSON.stringify(e.detail), updatedAt: now });
+      if (e.id) {
+        const old = readTable_('Expenses').filter(function (x) { return x.id === e.id && x.tripId === trip.id; })[0];
+        if (!old) return { ok: false, error: 'That expense no longer exists. Reload the page.' };
+        updateRow_('Expenses', old._row, Object.assign(row, { createdAt: old.createdAt }));
+      } else {
+        row.id = Utilities.getUuid().slice(0, 8);
+        row.createdAt = now;
+        appendRows_('Expenses', [row]);
+      }
+      return { ok: true, id: row.id };
+    }
+    case 'deleteExpense': {
+      const old = readTable_('Expenses').filter(function (x) { return x.id === input.id; })[0];
+      if (!old) return { ok: false, error: 'That expense no longer exists.' };
+      deleteRows_('Expenses', [old._row]);
+      return { ok: true };
+    }
+    case 'call': {
+      const trip = tripById_(String(input.tripId || ''));
+      if (!trip) return { ok: false, error: 'Trip not found.' };
+      const stage = input.stage === 'Final' ? 'Final' : input.stage === 'Interim' ? 'Interim' : '';
+      const call = { id: Utilities.getUuid().slice(0, 8), tripId: trip.id, stage: stage, reason: clean_(input.reason, 300),
+        perPerson: round2_(Number(input.perPerson) || 0), dueDate: isoDate_(input.dueDate), createdAt: new Date().toISOString() };
+      if (!stage) return { ok: false, error: 'Choose interim or final.' };
+      if (stage === 'Interim' && (!(call.perPerson > 0) || call.reason.length < 3)) return { ok: false, error: 'An interim payment needs an amount per person and a reason, e.g. "Hotels need paying 6 weeks before".' };
+      if (stage === 'Final' && readTable_('Calls').some(function (c) { return c.tripId === trip.id && c.stage === 'Final'; })) return { ok: false, error: 'The final balance has already been called. Use "Remind everyone who owes" instead.' };
+      if (!call.dueDate) return { ok: false, error: 'Choose the date it is due by.' };
+      appendRows_('Calls', [call]);
+      let sent = 0;
+      if (input.email !== false) {
+        const m = tripMoney_(trip);
+        m.bookings.forEach(function (b) {
+          const row = m.result.bookings.filter(function (x) { return x.ref === b.ref; })[0];
+          if (b.status !== 'Booked' || !row || !(row.owesNow > row.claimed)) return;
+          if (sendMail_(b.email, buildCallEmail_(b, row, call, trip, cfg, bookingLink_(cfg.siteUrl, b.ref, b.token)))) sent++;
+        });
+        const saved = readTable_('Calls').filter(function (c) { return c.id === call.id; })[0];
+        if (saved) updateRow_('Calls', saved._row, Object.assign({}, saved, { emailed: String(sent) }));
+      }
+      return { ok: true, emailed: sent };
+    }
+    case 'remind': {
+      const trip = tripById_(String(input.tripId || ''));
+      if (!trip) return { ok: false, error: 'Trip not found.' };
+      const m = tripMoney_(trip);
+      const only = Array.isArray(input.refs) ? input.refs : null;
+      let sent = 0;
+      m.bookings.forEach(function (b) {
+        const row = m.result.bookings.filter(function (x) { return x.ref === b.ref; })[0];
+        if (b.status !== 'Booked' || !row || !(row.owesNow > row.claimed) || (only && only.indexOf(b.ref) === -1)) return;
+        if (sendMail_(b.email, buildReminderEmail_(b, row, trip, cfg, bookingLink_(cfg.siteUrl, b.ref, b.token)))) sent++;
+      });
+      return { ok: true, emailed: sent };
+    }
     default: return { ok: false, error: 'Unknown organiser request.' };
   }
 }
@@ -850,6 +1036,7 @@ if (typeof module !== 'undefined') {
     validateTrip_: validateTrip_, validatePerson_: validatePerson_, validateRegistration_: validateRegistration_,
     findDuplicate_: findDuplicate_, paymentTotals_: paymentTotals_, validateClaim_: validateClaim_, bookingLink_: bookingLink_,
     buildRegistrationEmail_: buildRegistrationEmail_, buildPlaceOfferedEmail_: buildPlaceOfferedEmail_, parseSettings_: parseSettings_,
+    buildCallEmail_: buildCallEmail_, buildReminderEmail_: buildReminderEmail_, buildLinksEmail_: buildLinksEmail_,
     safeCell_: safeCell_, REF_BLOCKED: REF_BLOCKED,
   };
 }

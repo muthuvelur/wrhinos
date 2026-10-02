@@ -221,5 +221,20 @@
   });
   $('copyLink').addEventListener('click', function () { T.copy($('resLink').textContent, $('copyLink')); });
 
+  $('lostForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var email = $('lostEmail').value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { T.errorBox($('lostError'), ['Enter the email address you registered with.']); return; }
+    T.errorBox($('lostError'), []);
+    $('lostBtn').disabled = true;
+    T.api.post({ action: 'resend', email: email, website: $('website').value }).then(function (r) {
+      if (!r || !r.ok) { T.errorBox($('lostError'), [(r && r.error) || 'That didn’t work. Please try again.']); return; }
+      $('lostDone').textContent = r.message;
+      $('lostDone').hidden = false;
+      $('lostEmail').value = '';
+    }).catch(function () { T.errorBox($('lostError'), ['That didn’t work. Check your connection and try again.']); })
+      .then(function () { $('lostBtn').disabled = false; });
+  });
+
   if (tripId) loadTrip(); else loadList();
 })();

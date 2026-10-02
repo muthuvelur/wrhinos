@@ -252,7 +252,20 @@
         return db;
       });
     };
-    var getDb = function () { var db = load(); return db ? Promise.resolve(db) : seed(); };
+    var getDb = function () {
+      var db = load();
+      if (db) { db.expenses = db.expenses || []; db.calls = db.calls || []; db.trips.forEach(function (t) { if (t.charityFee === undefined) t.charityFee = 50; }); }
+      return db ? Promise.resolve(db) : seed();
+    };
+    var flatPeople = function (db, tripId) {
+      var out = [];
+      db.bookings.forEach(function (b) { if (b.tripId === tripId) (b.persons || []).forEach(function (p) { out.push(Object.assign({}, p, { ref: b.ref, tripId: tripId })); }); });
+      return out;
+    };
+    var tripMoney = function (db, t) {
+      var of = function (list) { return list.filter(function (x) { return x.tripId === t.id; }); };
+      return window.Money.balances(t, of(db.bookings), flatPeople(db, t.id), of(db.payments), of(db.expenses), of(db.calls));
+    };
     var taken = function (db, id) { return db.bookings.filter(function (b) { return b.tripId === id && b.status === 'Booked'; }).reduce(function (a, b) { return a + b.people; }, 0); };
     var routes = function (t) { return String(t.routes || '').split('\n').map(function (l) { var i = l.lastIndexOf('|'); var label = (i === -1 ? l : l.slice(0, i)).trim(); var url = (i === -1 ? '' : l.slice(i + 1)).trim(); return { label: label, url: /^https:\/\//.test(url) ? url : '' }; }).filter(function (r) { return r.label; }); };
     var pub = function (db, t) { return Object.assign({}, t, { placesLeft: Math.max(0, t.places - taken(db, t.id)), routes: routes(t), waiting: db.bookings.filter(function (b) { return b.tripId === t.id && b.status === 'Waiting list'; }).length }); };
@@ -261,7 +274,10 @@
     var bank = { accountName: 'W/Rhinos Cycling Club', sortCode: '00-00-00', accountNumber: '00000000' };
     var view = function (db, b) {
       var t = db.trips.filter(function (x) { return x.id === b.tripId; })[0];
-      return { ok: true, booking: b, people: b.persons, payments: db.payments.filter(function (p) { return p.ref === b.ref && p.status !== 'Rejected'; }), totals: totals(db, b.ref), bank: bank,
+      var m = tripMoney(db, t);
+      var mo = { row: m.bookings.filter(function (x) { return x.ref === b.ref; })[0], finalCalled: m.finalCalled, charityFee: t.charityFee,
+        calls: db.calls.filter(function (c) { return c.tripId === t.id; }), expenses: m.expenses };
+      return { ok: true, booking: b, people: b.persons, payments: db.payments.filter(function (p) { return p.ref === b.ref && p.status !== 'Rejected'; }), totals: totals(db, b.ref), bank: bank, money: mo,
         trip: { id: t.id, name: t.name, datesText: t.datesText, startDate: t.startDate, depositDays: t.depositDays, status: t.status, routes: routes(t) } };
     };
     var auth = function (db, x) { return db.bookings.filter(function (b) { return b.ref === String(x.ref || '').toUpperCase() && b.token === x.token; })[0]; };
@@ -307,7 +323,7 @@
             if (body.op === 'saveTrip') {
               var tr = body.trip;
               if (!tr.name || !tr.startDate || !(+tr.places > 0)) return { ok: false, error: 'Fill in the name, start date and places.' };
-              tr.places = +tr.places; tr.depositPerPerson = +tr.depositPerPerson; tr.depositDays = +tr.depositDays;
+              tr.places = +tr.places; tr.depositPerPerson = +tr.depositPerPerson; tr.depositDays = +tr.depositDays; tr.charityFee = tr.charityFee === '' ? 50 : +tr.charityFee;
               if (tr.id) { Object.assign(db.trips.filter(function (x) { return x.id === tr.id; })[0], tr); }
               else { tr.id = (tr.name + ' ' + tr.startDate.slice(0, 4)).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40); db.trips.push(tr); }
               save(db); return { ok: true, id: tr.id };
@@ -322,6 +338,33 @@
               b.status = body.status; save(db); return { ok: true, emailed: false };
             }
             if (body.op === 'saveNotes') { b = db.bookings.filter(function (x) { return x.ref === body.ref; })[0]; b.organiserNotes = body.notes; save(db); return { ok: true }; }
+            t = db.trips.filter(function (x) { return x.id === body.tripId; })[0];
+            if (body.op === 'money') {
+              var live = {}; db.bookings.forEach(function (x) { if (x.tripId === t.id && x.status === 'Booked') live[x.ref] = 1; });
+              return { ok: true, result: tripMoney(db, t), expenses: db.expenses.filter(function (e) { return e.tripId === t.id; }), calls: db.calls.filter(function (c) { return c.tripId === t.id; }),
+                people: flatPeople(db, t.id).filter(function (p) { return live[p.ref]; }).map(function (p) { return { key: window.Money.personKey(p.ref, p.n), ref: p.ref, n: p.n, name: p.fullName, role: p.role, bikeType: p.bikeType, under18: p.under18 }; }),
+                bookings: db.bookings.filter(function (x) { return x.tripId === t.id; }).map(function (x) { return { ref: x.ref, status: x.status, leadName: x.leadName, email: x.email, mobile: x.mobile, link: link(x) }; }) };
+            }
+            if (body.op === 'saveExpense') {
+              var v = window.Money.validateExpense(body.expense);
+              if (v.errors.length) return { ok: false, error: v.errors.join(' ') };
+              var ex = Object.assign({}, v.value, { tripId: t.id });
+              if (ex.id) db.expenses = db.expenses.map(function (x) { return x.id === ex.id ? ex : x; }); else { ex.id = uid(8); db.expenses.push(ex); }
+              save(db); return { ok: true, id: ex.id };
+            }
+            if (body.op === 'deleteExpense') { db.expenses = db.expenses.filter(function (x) { return x.id !== body.id; }); save(db); return { ok: true }; }
+            if (body.op === 'call') {
+              if (body.stage === 'Interim' && (!(+body.perPerson > 0) || String(body.reason || '').trim().length < 3)) return { ok: false, error: 'An interim payment needs an amount per person and a reason.' };
+              if (body.stage === 'Final' && db.calls.some(function (c) { return c.tripId === t.id && c.stage === 'Final'; })) return { ok: false, error: 'The final balance has already been called.' };
+              if (!body.dueDate) return { ok: false, error: 'Choose the date it is due by.' };
+              db.calls.push({ id: uid(8), tripId: t.id, stage: body.stage, reason: body.reason || '', perPerson: +body.perPerson || 0, dueDate: body.dueDate, createdAt: new Date().toISOString() });
+              save(db); return { ok: true, emailed: 0 };
+            }
+            if (body.op === 'remind') return { ok: true, emailed: 0 };
+          }
+          if (body.action === 'resend') {
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(body.email || '').trim())) return { ok: false, error: 'Enter the email address you registered with.' };
+            return { ok: true, message: 'If that email has a booking, we have sent the link to it. (Preview: no email is actually sent.)' };
           }
           return { ok: false, error: 'Unknown request.' };
         });

@@ -73,6 +73,9 @@
   function openTrip(id) {
     current = trips.filter(function (t) { return t.id === id; })[0];
     if (!current) { views('tripsView'); return; }
+    mon = null;
+    closeEditor();
+    $('callForm').hidden = true;
     $('oDates').textContent = current.datesText;
     $('oName').textContent = current.name;
     $('oStatus').textContent = current.status;
@@ -89,7 +92,10 @@
   function setTab(name) {
     Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (t) { t.setAttribute('aria-selected', t.getAttribute('data-tab') === name ? 'true' : 'false'); });
     $('bookingsTab').hidden = name !== 'bookings';
+    $('expensesTab').hidden = name !== 'expenses';
+    $('moneyTab').hidden = name !== 'money';
     $('editTab').hidden = name !== 'edit';
+    if (name === 'expenses' || name === 'money') loadMoney();
   }
   Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (t) { t.addEventListener('click', function () { setTab(t.getAttribute('data-tab')); }); });
 
@@ -107,7 +113,8 @@
       '<div class="field"><label>First day of the trip</label><input type="date" data-f="startDate" value="' + v('startDate') + '"><span class="hint">Used to work out who is under 18.</span></div></div>' +
       '<div class="grid2"><div class="field"><label>Places</label><input type="number" min="1" data-f="places" value="' + v('places') + '"><span class="hint">Everyone counts: riders, non-riders, children, support crew.</span></div>' +
       '<div class="field"><label>Deposit per person (£)</label><input type="number" min="0" step="0.01" data-f="depositPerPerson" value="' + v('depositPerPerson') + '"><span class="hint">Support crew pay no deposit.</span></div></div>' +
-      '<div class="field"><label>Days to pay the deposit</label><input type="number" min="1" data-f="depositDays" value="' + v('depositDays') + '"></div>' +
+      '<div class="grid2"><div class="field"><label>Days to pay the deposit</label><input type="number" min="1" data-f="depositDays" value="' + v('depositDays') + '"></div>' +
+      '<div class="field"><label>Charity fee per rider (£)</label><input type="number" min="0" step="0.01" data-f="charityFee" value="' + esc(t.charityFee === undefined ? 50 : t.charityFee) + '"><span class="hint">Added to every rider’s bill and given to a charity the riders choose.</span></div></div>' +
       '<div class="field"><label>One-line summary</label><input type="text" data-f="summary" value="' + v('summary') + '"></div>' +
       '</div>' +
       '<div class="card stack"><div class="field"><label>Route links</label><textarea data-f="routes" rows="4" placeholder="Day 1: Frankfurt – St Goar | https://ridewithgps.com/routes/…">' + esc(t.routesText || '') + '</textarea>' +
@@ -130,7 +137,7 @@
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var trip = { id: t ? t.id : '' };
-      ['name', 'status', 'organiser', 'datesText', 'startDate', 'places', 'depositPerPerson', 'depositDays', 'summary', 'routes', 'details'].forEach(function (k) { trip[k] = get(k); });
+      ['name', 'status', 'organiser', 'datesText', 'startDate', 'places', 'depositPerPerson', 'depositDays', 'charityFee', 'summary', 'routes', 'details'].forEach(function (k) { trip[k] = get(k); });
       var btn = form.querySelector('[type=submit]');
       btn.disabled = true;
       admin('saveTrip', { trip: trip }).then(function (r) {
@@ -299,6 +306,360 @@
       });
     });
   }
+
+  // ================= expenses and money =================
+  var M = window.Money;
+  var mon = null;          // last 'money' response for the current trip
+  var draft = null;        // expense being edited
+  var ROOM_TYPES = ['Single', 'Double', 'Twin', 'Triple', 'Family / quad', 'Other'];
+  var SPLIT_LABELS = { equal: 'Everyone', select: 'Some people', rooms: 'Rooms', custom: 'Set amounts' };
+
+  function loadMoney() {
+    if (!current) return Promise.resolve();
+    return admin('money', { tripId: current.id }).then(function (r) {
+      if (!r.ok) { T.toast(r.error); return; }
+      mon = r;
+      renderExpenses();
+      renderMoney();
+    }).catch(function () { /* */ });
+  }
+  function personName(key) {
+    var p = mon && mon.people.filter(function (x) { return x.key === key; })[0];
+    return p ? p.name : '(no longer booked)';
+  }
+  function stats(el, list) { el.innerHTML = list.map(function (s) { return '<div><b>' + esc(s[0]) + '</b><span>' + esc(s[1]) + '</span></div>'; }).join(''); }
+
+  // ---------- expenses list ----------
+  function renderExpenses() {
+    var r = mon.result;
+    stats($('expStats'), [
+      [T.money(r.totals.expenses), 'Expenses entered'],
+      [T.money(r.totals.charity), 'Charity fees (£' + (current.charityFee === undefined ? 50 : current.charityFee) + ' per rider)'],
+      [T.money(r.totals.cost), 'Total to collect'],
+      [r.totals.people, 'People sharing costs'],
+    ]);
+    var warn = r.expenses.filter(function (e) { return e.unallocated > 0; });
+    $('expWarn').hidden = !warn.length;
+    $('expWarn').innerHTML = warn.length ? '<b>Not everything is shared out:</b> ' + warn.map(function (e) { return esc(e.name) + ' has ' + T.money(e.unallocated) + ' that nobody is paying (for example a room whose people have cancelled). Edit it to fix.'; }).join(' ') : '';
+    $('expList').innerHTML = mon.expenses.length ? mon.expenses.map(function (e) {
+      var calc = r.expenses.filter(function (x) { return x.id === e.id; })[0] || {};
+      return '<div class="card stack" data-exp="' + esc(e.id) + '"><div class="row" style="justify-content:space-between;align-items:flex-start">' +
+        '<div><b style="font-size:17px">' + esc(e.name) + '</b><div class="small muted">' + esc(calc.describe || '') + (calc.people ? ' · ' + calc.people + ' people' : '') +
+        (e.paidBy ? ' · paid by ' + esc(e.paidBy) : '') + (e.date ? ' · ' + esc(T.niceDate(e.date)) : '') + '</div></div>' +
+        '<div style="text-align:right"><b style="font-size:18px">' + T.money(calc.total || e.amount) + '</b>' +
+        (calc.unallocated > 0 ? '<div class="chip warn">' + T.money(calc.unallocated) + ' not shared</div>' : '') + '</div></div>' +
+        '<div class="row"><button type="button" class="btn btn-line btn-small" data-edit="' + esc(e.id) + '">Edit</button>' +
+        (e.split === 'rooms' ? '<button type="button" class="btn btn-line btn-small" data-copy-exp="' + esc(e.id) + '">Copy rooms to a new expense</button>' : '') + '</div></div>';
+    }).join('') : '<div class="card muted">No expenses yet. Add the first one, for example “Hotel – Frankfurt” or “Support company”.</div>';
+    Array.prototype.forEach.call(document.querySelectorAll('[data-edit]'), function (b) {
+      b.addEventListener('click', function () { openEditor(mon.expenses.filter(function (e) { return e.id === b.getAttribute('data-edit'); })[0]); });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-copy-exp]'), function (b) {
+      b.addEventListener('click', function () {
+        var src = mon.expenses.filter(function (e) { return e.id === b.getAttribute('data-copy-exp'); })[0];
+        openEditor({ name: '', split: 'rooms', detail: { rooms: JSON.parse(JSON.stringify(src.detail.rooms || [])).map(function (rm) { rm.cost = ''; return rm; }) } }, 'Same rooms as “' + src.name + '”. Enter this hotel’s name and room prices.');
+      });
+    });
+  }
+  $('addExpense').addEventListener('click', function () { openEditor(null); });
+
+  // ---------- expense editor ----------
+  function openEditor(e, hint) {
+    draft = e ? JSON.parse(JSON.stringify(e)) : { name: '', split: 'equal', amount: '', detail: { group: 'all' }, date: '', paidBy: '', notes: '' };
+    draft.detail = draft.detail || {};
+    draft._hint = hint || '';
+    $('expEditor').hidden = false;
+    $('addExpense').hidden = true;
+    renderEditor();
+    $('expEditor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  function closeEditor() { draft = null; $('expEditor').hidden = true; $('expEditor').innerHTML = ''; $('addExpense').hidden = false; }
+
+  function inRooms(exceptIndex) {
+    var used = {};
+    (draft.detail.rooms || []).forEach(function (r, i) { if (i !== exceptIndex) (r.people || []).forEach(function (k) { used[k] = true; }); });
+    return used;
+  }
+  function peopleOptions(exclude) {
+    var byRef = {};
+    mon.people.forEach(function (p) { if (!exclude[p.key]) (byRef[p.ref] = byRef[p.ref] || []).push(p); });
+    return Object.keys(byRef).map(function (ref) {
+      return '<optgroup label="' + esc(ref) + '">' + byRef[ref].map(function (p) { return '<option value="' + esc(p.key) + '">' + esc(p.name) + '</option>'; }).join('') + '</optgroup>';
+    }).join('');
+  }
+
+  function editorBody() {
+    var d = draft.detail;
+    if (draft.split === 'equal') {
+      return '<div class="grid2"><div class="field"><label for="exAmount">Amount (£)</label><input type="text" inputmode="decimal" id="exAmount" value="' + esc(draft.amount) + '"></div>' +
+        '<div class="field"><label for="exGroup">Shared between</label><select id="exGroup">' + Object.keys(M.GROUPS).map(function (g) {
+          return '<option value="' + g + '"' + ((d.group || 'all') === g ? ' selected' : '') + '>' + esc(M.GROUPS[g].label) + '</option>'; }).join('') + '</select></div></div>';
+    }
+    if (draft.split === 'select') {
+      var chosen = {};
+      (d.people || []).forEach(function (k) { chosen[k] = true; });
+      var byRef = {};
+      mon.people.forEach(function (p) { (byRef[p.ref] = byRef[p.ref] || []).push(p); });
+      return '<div class="field"><label for="exAmount">Amount (£)</label><input type="text" inputmode="decimal" id="exAmount" value="' + esc(draft.amount) + '"></div>' +
+        '<div class="row"><button type="button" class="btn btn-line btn-small" id="selAll">Select everyone</button><button type="button" class="btn btn-line btn-small" id="selNone">Clear</button></div>' +
+        '<div class="stack">' + Object.keys(byRef).map(function (ref) {
+          var ps = byRef[ref];
+          return '<div style="border-top:1px solid var(--rule);padding-top:8px"><label class="check"><input type="checkbox" data-family="' + esc(ref) + '"' + (ps.every(function (p) { return chosen[p.key]; }) ? ' checked' : '') + '><b>' + esc(ps[0].name) + (ps.length > 1 ? ' and family' : '') + '</b></label>' +
+            (ps.length > 1 ? '<div style="padding-left:34px" class="stack">' + ps.map(function (p) {
+              return '<label class="check small"><input type="checkbox" data-person="' + esc(p.key) + '"' + (chosen[p.key] ? ' checked' : '') + '>' + esc(p.name) + ' <span class="muted">(' + esc(p.role) + ')</span></label>';
+            }).join('') + '</div>' : '<input type="checkbox" hidden data-person="' + esc(ps[0].key) + '"' + (chosen[ps[0].key] ? ' checked' : '') + '>') + '</div>';
+        }).join('') + '</div>';
+    }
+    if (draft.split === 'rooms') {
+      var rooms = d.rooms || [];
+      var unassigned = mon.people.filter(function (p) { return !inRooms(-1)[p.key]; });
+      return '<div class="row"><button type="button" class="btn btn-line btn-small" id="roomPerBooking">One room per booking</button>' +
+        (mon.expenses.some(function (e) { return e.split === 'rooms' && e.id !== draft.id; }) ? '<select id="copyRoomsFrom" style="width:auto;min-height:36px;padding:6px 10px"><option value="">Copy rooms from…</option>' +
+          mon.expenses.filter(function (e) { return e.split === 'rooms' && e.id !== draft.id; }).map(function (e) { return '<option value="' + esc(e.id) + '">' + esc(e.name) + '</option>'; }).join('') + '</select>' : '') + '</div>' +
+        '<div class="stack" id="roomRows">' + rooms.map(function (r, i) {
+          var avail = inRooms(i);
+          return '<div class="card stack" style="background:var(--ground)" data-room="' + i + '">' +
+            '<div class="grid2"><div class="field"><label>Room</label><input type="text" data-rk="label" value="' + esc(r.label) + '"></div>' +
+            '<div class="grid2 keep2"><div class="field"><label>Type</label><select data-rk="type"><option value=""></option>' + ROOM_TYPES.map(function (t) { return '<option' + (r.type === t ? ' selected' : '') + '>' + t + '</option>'; }).join('') + '</select></div>' +
+            '<div class="field"><label>Cost (£)</label><input type="text" inputmode="decimal" data-rk="cost" value="' + esc(r.cost) + '"></div></div></div>' +
+            '<div class="row">' + (r.people || []).map(function (k) { return '<span class="chip">' + esc(personName(k)) + ' <button type="button" class="linkbtn" data-unroom="' + esc(k) + '" aria-label="Remove">×</button></span>'; }).join('') +
+            '<select data-addto="' + i + '" style="width:auto;min-height:36px;padding:6px 10px"><option value="">+ Add person</option>' + peopleOptions(Object.assign({}, avail, (function () { var o = {}; (r.people || []).forEach(function (k) { o[k] = true; }); return o; })())) + '</select>' +
+            '<button type="button" class="linkbtn small" data-delroom="' + i + '" style="margin-left:auto">Remove room</button></div>' +
+            '<div class="small muted">' + ((r.people || []).length && M.pence(r.cost) > 0 ? T.money(M.pounds(Math.round(M.pence(r.cost) / r.people.length))) + ' each' : '') + '</div></div>';
+        }).join('') + '</div>' +
+        '<button type="button" class="btn btn-line btn-small" id="addRoom">+ Add room</button>' +
+        (unassigned.length ? '<div class="notice small">' + unassigned.length + (unassigned.length === 1 ? ' person is' : ' people are') + ' not in a room yet: ' + unassigned.slice(0, 12).map(function (p) { return esc(p.name); }).join(', ') + (unassigned.length > 12 ? '…' : '') + '. Anyone not in a room pays nothing for this expense.</div>' : '<div class="success small">Everyone is in a room.</div>');
+    }
+    var amounts = d.amounts || {};
+    return '<div class="stack">' + mon.people.map(function (p) {
+      return '<div class="row" style="justify-content:space-between"><span>' + esc(p.name) + ' <span class="small muted">' + esc(p.ref) + '</span></span>' +
+        '<input type="text" inputmode="decimal" data-amt="' + esc(p.key) + '" value="' + esc(amounts[p.key] || '') + '" placeholder="£0" style="width:110px;min-height:40px"></div>';
+    }).join('') + '</div>';
+  }
+
+  function previewText() {
+    var e = { split: draft.split, amount: draft.amount, detail: draft.detail };
+    var s = M.shares(e, mon.people);
+    var keys = Object.keys(s.shares);
+    if (!s.total) return 'Enter the amounts to see how it is shared.';
+    var vals = keys.map(function (k) { return s.shares[k]; });
+    var each = !vals.length ? '' : Math.max.apply(null, vals) - Math.min.apply(null, vals) <= 1 ? T.money(M.pounds(vals[0])) + ' each for ' + keys.length + ' people'
+      : 'from ' + T.money(M.pounds(Math.min.apply(null, vals))) + ' to ' + T.money(M.pounds(Math.max.apply(null, vals))) + ' each, ' + keys.length + ' people';
+    return '<b>Total ' + T.money(M.pounds(s.total)) + '</b>' + (each ? ': ' + each : '') + (s.unallocated ? '. <span style="color:var(--warn)">' + T.money(M.pounds(s.unallocated)) + ' is not shared by anyone.</span>' : '.');
+  }
+
+  function renderEditor() {
+    var box = $('expEditor');
+    box.innerHTML = '<form class="card stack" id="exForm" novalidate>' +
+      '<h2 class="section-title">' + (draft.id ? 'Edit expense' : 'New expense') + '</h2>' +
+      (draft._hint ? '<div class="notice small">' + esc(draft._hint) + '</div>' : '') +
+      '<div class="field"><label for="exName">What is it?</label><input type="text" id="exName" value="' + esc(draft.name) + '" placeholder="e.g. Hotel – Frankfurt, Support company, Bike lorry"></div>' +
+      '<div class="field"><span class="label">How is it shared?</span><div class="filters">' + Object.keys(SPLIT_LABELS).map(function (k) {
+        return '<button type="button" class="filter" data-split="' + k + '" aria-pressed="' + (draft.split === k) + '">' + SPLIT_LABELS[k] + '</button>'; }).join('') + '</div>' +
+      '<span class="hint">' + { equal: 'One click: split equally, for example the support company or the lorry.', select: 'Split equally between the people you tick, for example the boat for the family group.',
+        rooms: 'Each room’s price is split between the people in it. A single pays the whole room.', custom: 'Type what each person pays, for anything unusual.' }[draft.split] + '</span></div>' +
+      '<div id="exBody" class="stack">' + editorBody() + '</div>' +
+      '<div class="success small" id="exPreview">' + previewText() + '</div>' +
+      '<details class="more"' + (draft.paidBy || draft.date || draft.notes ? ' open' : '') + '><summary>Date, who paid it, notes</summary><div class="stack">' +
+      '<div class="grid2"><div class="field"><label for="exDate">Date</label><input type="date" id="exDate" value="' + esc(draft.date) + '"></div>' +
+      '<div class="field"><label for="exPaidBy">Paid by</label><input type="text" id="exPaidBy" value="' + esc(draft.paidBy) + '" placeholder="e.g. Ram (card), club account"></div></div>' +
+      '<div class="field"><label for="exNotes">Notes</label><input type="text" id="exNotes" value="' + esc(draft.notes) + '" placeholder="e.g. invoice 1234"></div></div></details>' +
+      '<div class="error" id="exError" hidden></div>' +
+      '<div class="row"><button type="submit" class="btn btn-primary">' + (draft.id ? 'Save' : 'Add expense') + '</button>' +
+      '<button type="button" class="btn btn-line" id="exCancel">Cancel</button>' +
+      (draft.id ? '<button type="button" class="linkbtn" id="exDelete" style="margin-left:auto">Delete</button>' : '') + '</div></form>';
+    wireEditor();
+  }
+
+  function refreshPreview() { var p = $('exPreview'); if (p) p.innerHTML = previewText(); }
+  function rerenderBody() { $('exBody').innerHTML = editorBody(); wireBody(); refreshPreview(); }
+
+  function wireEditor() {
+    $('exName').addEventListener('input', function () { draft.name = this.value; });
+    $('exDate').addEventListener('input', function () { draft.date = this.value; });
+    $('exPaidBy').addEventListener('input', function () { draft.paidBy = this.value; });
+    $('exNotes').addEventListener('input', function () { draft.notes = this.value; });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-split]'), function (b) {
+      b.addEventListener('click', function () {
+        draft.split = b.getAttribute('data-split');
+        if (draft.split === 'equal' && !draft.detail.group) draft.detail.group = 'all';
+        if (draft.split === 'rooms' && !draft.detail.rooms) draft.detail.rooms = [];
+        renderEditor();
+      });
+    });
+    $('exCancel').addEventListener('click', closeEditor);
+    if ($('exDelete')) $('exDelete').addEventListener('click', function () {
+      var b = this;
+      if (b.getAttribute('data-sure') !== '1') { b.setAttribute('data-sure', '1'); b.textContent = 'Tap again to delete'; return; }
+      admin('deleteExpense', { id: draft.id }).then(function (r) { if (!r.ok) { T.toast(r.error); return; } T.toast('Expense deleted'); closeEditor(); loadMoney(); });
+    });
+    $('exForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var exp = { id: draft.id || '', name: draft.name, split: draft.split, amount: draft.amount, detail: draft.detail, date: draft.date, paidBy: draft.paidBy, notes: draft.notes };
+      var v = M.validateExpense(exp);
+      T.errorBox($('exError'), v.errors);
+      if (v.errors.length) return;
+      var btn = this.querySelector('[type=submit]');
+      btn.disabled = true;
+      admin('saveExpense', { tripId: current.id, expense: exp }).then(function (r) {
+        if (!r.ok) { T.errorBox($('exError'), [r.error]); return; }
+        T.toast(draft.id ? 'Expense saved' : 'Expense added');
+        closeEditor();
+        return loadMoney();
+      }).catch(function () { /* */ }).then(function () { btn.disabled = false; });
+    });
+    wireBody();
+  }
+
+  function wireBody() {
+    var d = draft.detail;
+    var amt = $('exAmount');
+    if (amt) amt.addEventListener('input', function () { draft.amount = this.value; refreshPreview(); });
+    if ($('exGroup')) $('exGroup').addEventListener('change', function () { d.group = this.value; refreshPreview(); });
+    if (draft.split === 'select') {
+      var sync = function () {
+        d.people = Array.prototype.filter.call(document.querySelectorAll('#exBody [data-person]'), function (c) { return c.checked; }).map(function (c) { return c.getAttribute('data-person'); });
+        refreshPreview();
+      };
+      Array.prototype.forEach.call(document.querySelectorAll('#exBody [data-family]'), function (f) {
+        f.addEventListener('change', function () {
+          Array.prototype.forEach.call(document.querySelectorAll('#exBody [data-person^="' + f.getAttribute('data-family') + '-"]'), function (c) { c.checked = f.checked; });
+          sync();
+        });
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('#exBody [data-person]'), function (c) { c.addEventListener('change', sync); });
+      $('selAll').addEventListener('click', function () { d.people = mon.people.map(function (p) { return p.key; }); rerenderBody(); });
+      $('selNone').addEventListener('click', function () { d.people = []; rerenderBody(); });
+    }
+    if (draft.split === 'rooms') {
+      d.rooms = d.rooms || [];
+      $('addRoom').addEventListener('click', function () { d.rooms.push({ label: 'Room ' + (d.rooms.length + 1), type: '', cost: '', people: [] }); rerenderBody(); });
+      $('roomPerBooking').addEventListener('click', function () {
+        var used = inRooms(-1), byRef = {};
+        mon.people.forEach(function (p) { if (!used[p.key]) (byRef[p.ref] = byRef[p.ref] || []).push(p.key); });
+        Object.keys(byRef).forEach(function (ref) {
+          var n = byRef[ref].length;
+          d.rooms.push({ label: personName(byRef[ref][0]) + (n > 1 ? ' + ' + (n - 1) : ''), type: n === 1 ? 'Single' : n === 2 ? 'Double' : n === 3 ? 'Triple' : 'Family / quad', cost: '', people: byRef[ref] });
+        });
+        rerenderBody();
+      });
+      if ($('copyRoomsFrom')) $('copyRoomsFrom').addEventListener('change', function () {
+        var src = mon.expenses.filter(function (e) { return e.id === this.value; }.bind(this))[0];
+        if (!src) return;
+        d.rooms = JSON.parse(JSON.stringify(src.detail.rooms || [])).map(function (r) { r.cost = ''; return r; });
+        rerenderBody();
+        T.toast('Rooms copied: enter this hotel’s prices');
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('#roomRows [data-room]'), function (row) {
+        var i = Number(row.getAttribute('data-room'));
+        Array.prototype.forEach.call(row.querySelectorAll('[data-rk]'), function (inp) {
+          inp.addEventListener(inp.tagName === 'SELECT' ? 'change' : 'input', function () { d.rooms[i][inp.getAttribute('data-rk')] = inp.value; refreshPreview(); });
+          if (inp.getAttribute('data-rk') === 'cost') inp.addEventListener('change', rerenderBody);
+        });
+        row.querySelector('[data-addto]').addEventListener('change', function () { if (this.value) { d.rooms[i].people.push(this.value); rerenderBody(); } });
+        Array.prototype.forEach.call(row.querySelectorAll('[data-unroom]'), function (x) {
+          x.addEventListener('click', function () { var k = x.getAttribute('data-unroom'); d.rooms[i].people = d.rooms[i].people.filter(function (y) { return y !== k; }); rerenderBody(); });
+        });
+        row.querySelector('[data-delroom]').addEventListener('click', function () { d.rooms.splice(i, 1); rerenderBody(); });
+      });
+    }
+    if (draft.split === 'custom') {
+      d.amounts = d.amounts || {};
+      Array.prototype.forEach.call(document.querySelectorAll('#exBody [data-amt]'), function (inp) {
+        inp.addEventListener('input', function () { d.amounts[inp.getAttribute('data-amt')] = inp.value; refreshPreview(); });
+      });
+    }
+  }
+
+  // ---------- money: balances, calls, reminders ----------
+  function renderMoney() {
+    var r = mon.result;
+    stats($('monStats'), [
+      [T.money(r.totals.cost), 'Total cost so far'],
+      [T.money(r.totals.collected), 'Paid and checked'],
+      [T.money(r.totals.claimed), 'Waiting to be checked'],
+      [T.money(r.totals.owesNow), 'Owed now'],
+    ]);
+    $('callList').innerHTML = mon.calls.length ? '<table class="plain"><thead><tr><th>Called</th><th>What</th><th>Due by</th><th>Emails</th></tr></thead><tbody>' + mon.calls.map(function (c) {
+      return '<tr><td>' + esc(T.niceDate(c.createdAt)) + '</td><td>' + (c.stage === 'Final' ? '<b>Final balance</b>' : '<b>Interim</b> ' + T.money(c.perPerson) + ' per person<br><span class="muted">' + esc(c.reason) + '</span>') + '</td><td>' + esc(T.niceDate(c.dueDate)) + '</td><td>' + esc(c.emailed || '–') + '</td></tr>';
+    }).join('') + '</tbody></table>' : '<p class="muted" style="margin:0">Only the deposit has been asked for so far.</p>';
+    $('callFinal').hidden = r.finalCalled;
+    $('callInterim').hidden = r.finalCalled;
+    $('monNote').textContent = r.finalCalled
+      ? 'The final balance has been called: everyone owes their full share of the costs, less what they have paid.'
+      : 'Until the final balance is called, “owes now” is the deposit' + (r.interimPerPerson ? ' plus ' + T.money(r.interimPerPerson) + ' per person in interim payments' : '') + '. “Cost so far” is their share of the expenses entered.';
+    var rows = r.bookings.filter(function (b) { return b.status === 'Booked'; }).sort(function (a, b) { return b.owesNow - a.owesNow; });
+    var info = {};
+    mon.bookings.forEach(function (b) { info[b.ref] = b; });
+    $('balanceList').innerHTML = rows.map(function (b) {
+      var bi = info[b.ref] || {};
+      var first = String(bi.leadName || '').split(' ')[0];
+      var due = Math.max(0, Math.round((b.owesNow - b.claimed) * 100) / 100);
+      var msg = 'Hi ' + first + ', a reminder that ' + T.money(due) + ' is due for your W/Rhinos booking on ' + current.name + '. Please pay to the club account using reference ' + b.ref + '. Your breakdown and the bank details: ' + bi.link;
+      return '<details class="card booking"><summary><span class="who">' + esc(bi.leadName) + (b.people.length > 1 ? ' +' + (b.people.length - 1) : '') + '</span>' +
+        (b.owesNow > 0 ? '<span class="chip ' + (b.claimed >= b.owesNow ? 'warn' : 'bad') + '">' + (b.claimed >= b.owesNow ? 'Check payment' : 'Owes ' + T.money(b.owesNow)) + '</span>' : '<span class="chip ok">Up to date</span>') +
+        '<span class="meta">' + esc(b.ref) + ' · cost so far ' + T.money(b.cost) + '</span><span class="meta">paid ' + T.money(b.confirmed) + '</span></summary>' +
+        '<div class="body">' + b.people.map(function (p) {
+          return '<div><b>' + esc(p.name) + '</b> <span class="small muted">' + esc(p.role) + '</span><table class="plain">' + p.lines.map(function (l) {
+            return '<tr><td>' + esc(l.name) + '</td><td style="text-align:right">' + T.money(l.amount) + '</td></tr>'; }).join('') +
+            '<tr><td><b>Total</b></td><td style="text-align:right"><b>' + T.money(p.total) + '</b></td></tr></table></div>';
+        }).join('') +
+        '<dl class="kv"><dt>Cost so far</dt><dd>' + T.money(b.cost) + '</dd><dt>Due so far</dt><dd>' + T.money(b.dueSoFar) + '</dd><dt>Paid and checked</dt><dd>' + T.money(b.confirmed) + '</dd>' +
+        (b.claimed ? '<dt>Waiting to check</dt><dd>' + T.money(b.claimed) + '</dd>' : '') + '<dt>Owes now</dt><dd><b>' + T.money(b.owesNow) + '</b></dd></dl>' +
+        '<div class="row">' + (due > 0 && bi.mobile ? '<a class="btn btn-line btn-small" target="_blank" rel="noopener" href="' + esc(T.waLink(bi.mobile, msg)) + '">WhatsApp reminder</a>' : '') +
+        (due > 0 ? '<button type="button" class="btn btn-line btn-small" data-remind="' + esc(b.ref) + '">Email reminder</button>' : '') + '</div></div></details>';
+    }).join('') || '<div class="muted">No confirmed bookings yet.</div>';
+    Array.prototype.forEach.call(document.querySelectorAll('[data-remind]'), function (btn) {
+      btn.addEventListener('click', function () {
+        admin('remind', { tripId: current.id, refs: [btn.getAttribute('data-remind')] }).then(function (x) { T.toast(x.ok ? (T.DEMO ? 'Preview: no email sent' : 'Reminder emailed') : x.error); });
+      });
+    });
+  }
+
+  function owingCount() { return mon.result.bookings.filter(function (b) { return b.status === 'Booked' && b.owesNow > b.claimed; }).length; }
+  $('remindAll').addEventListener('click', function () {
+    var btn = this, n = owingCount();
+    if (!n) { T.toast('Nobody owes anything right now'); return; }
+    if (btn.getAttribute('data-sure') !== '1') { btn.setAttribute('data-sure', '1'); btn.textContent = 'Tap again to email ' + n + (n === 1 ? ' booking' : ' bookings'); return; }
+    btn.disabled = true;
+    admin('remind', { tripId: current.id }).then(function (r) {
+      T.toast(r.ok ? (T.DEMO ? 'Preview: ' + n + ' reminders would be emailed' : 'Emailed ' + r.emailed + ' reminders') : r.error);
+    }).then(function () { btn.disabled = false; btn.removeAttribute('data-sure'); btn.textContent = 'Email everyone who owes'; });
+  });
+
+  function callForm(stage) {
+    var f = $('callForm');
+    var nextMonth = new Date(Date.now() + 28 * 86400000).toISOString().slice(0, 10);
+    f.innerHTML = (stage === 'Interim'
+      ? '<p class="small" style="margin:0">Ask everyone (except support crew) for a set amount per person, for example when a hotel needs paying before the trip. The Framework asks us to say why.</p>' +
+        '<div class="grid2"><div class="field"><label for="cfPer">Amount per person (£)</label><input type="text" inputmode="decimal" id="cfPer"></div>' +
+        '<div class="field"><label for="cfDue">Due by</label><input type="date" id="cfDue" value="' + nextMonth + '"></div></div>' +
+        '<div class="field"><label for="cfReason">Reason</label><input type="text" id="cfReason" placeholder="e.g. Hotels need paying 6 weeks before we go"></div>'
+      : '<p class="small" style="margin:0">Do this after the trip, once every cost is entered. Everyone is asked for their full share less what they have paid. You can still add or change expenses afterwards; balances update.</p>' +
+        '<div class="field"><label for="cfDue">Due by</label><input type="date" id="cfDue" value="' + nextMonth + '"></div>') +
+      '<label class="check"><input type="checkbox" id="cfEmail" checked>Email everyone who owes, with their amount and the bank details</label>' +
+      '<div class="error" id="cfError" hidden></div>' +
+      '<div class="row"><button type="submit" class="btn btn-primary">' + (stage === 'Interim' ? 'Call interim payment' : 'Call final balance') + '</button><button type="button" class="btn btn-line" id="cfCancel">Cancel</button></div>';
+    f.hidden = false;
+    f.dataset.stage = stage;
+    $('cfCancel').addEventListener('click', function () { f.hidden = true; });
+  }
+  $('callInterim').addEventListener('click', function () { callForm('Interim'); });
+  $('callFinal').addEventListener('click', function () { callForm('Final'); });
+  $('callForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = this, stage = f.dataset.stage;
+    var body = { tripId: current.id, stage: stage, dueDate: $('cfDue').value, email: $('cfEmail').checked };
+    if (stage === 'Interim') { body.perPerson = Number(String($('cfPer').value).replace(/[£,\s]/g, '')); body.reason = $('cfReason').value.trim(); }
+    var btn = f.querySelector('[type=submit]');
+    btn.disabled = true;
+    admin('call', body).then(function (r) {
+      if (!r.ok) { T.errorBox($('cfError'), [r.error]); return; }
+      f.hidden = true;
+      T.toast((stage === 'Final' ? 'Final balance called' : 'Interim payment called') + (T.DEMO ? ' (preview: no emails sent)' : ', ' + r.emailed + ' emails sent'));
+      return loadMoney();
+    }).catch(function () { /* */ }).then(function () { btn.disabled = false; });
+  });
 
   if (pass) {
     admin('login').then(function (r) { if (r.ok) { showProblems(r.problems); loadTrips(); } }).catch(function () { /* */ });

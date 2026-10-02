@@ -51,6 +51,8 @@
     </div>
     <div class="tabs" role="tablist">
       <button type="button" class="tab" role="tab" data-tab="bookings" aria-selected="true">Bookings</button>
+      <button type="button" class="tab" role="tab" data-tab="expenses" aria-selected="false">Expenses</button>
+      <button type="button" class="tab" role="tab" data-tab="money" aria-selected="false">Money</button>
       <button type="button" class="tab" role="tab" data-tab="edit" aria-selected="false">Trip details</button>
     </div>
 
@@ -59,6 +61,33 @@
       <div class="filters" id="filters"></div>
       <input type="text" id="search" placeholder="Search name, reference or email">
       <div id="bookingList" class="stack"></div>
+    </div>
+
+    <div id="expensesTab" class="stack" hidden>
+      <div class="stats" id="expStats"></div>
+      <div class="notice" id="expWarn" hidden></div>
+      <div class="row"><button type="button" class="btn btn-primary" id="addExpense">+ Add expense</button></div>
+      <div id="expEditor" hidden></div>
+      <div id="expList" class="stack"></div>
+    </div>
+
+    <div id="moneyTab" class="stack" hidden>
+      <div class="stats" id="monStats"></div>
+      <div class="card stack">
+        <h2 class="section-title">Payments called</h2>
+        <div id="callList" class="small"></div>
+        <div class="row">
+          <button type="button" class="btn btn-line btn-small" id="callInterim">Call an interim payment</button>
+          <button type="button" class="btn btn-line btn-small" id="callFinal">Call the final balance</button>
+        </div>
+        <form id="callForm" class="stack" hidden novalidate></form>
+      </div>
+      <div class="card stack">
+        <div class="row" style="justify-content:space-between"><h2 class="section-title">Who owes what</h2>
+          <button type="button" class="btn btn-primary btn-small" id="remindAll">Email everyone who owes</button></div>
+        <p class="small muted" style="margin:0" id="monNote"></p>
+        <div id="balanceList" class="stack"></div>
+      </div>
     </div>
 
     <div id="editTab" class="stack" hidden></div>
@@ -72,6 +101,7 @@
 </main>
 
 <script src="/trips/config.js"></script>
+<script src="/trips/money.js"></script>
 <script src="/trips/common.js"></script>
 <script src="/trips/organiser/organiser.js"></script>
 </body>

@@ -24,15 +24,41 @@
     $('waitingNote').hidden = b.status !== 'Waiting list';
     $('cancelledNote').hidden = b.status !== 'Cancelled';
 
-    var left = Math.max(0, Math.round((b.depositDue - r.totals.confirmed - r.totals.claimed) * 100) / 100);
-    $('mDue').textContent = T.money(b.depositDue);
+    var mo = r.money, row = mo && mo.row;
+    var dueSoFar = row ? row.dueSoFar : b.depositDue;
+    var left = Math.max(0, Math.round((dueSoFar - r.totals.confirmed - r.totals.claimed) * 100) / 100);
+    var finalCalled = mo && mo.finalCalled;
+    $('mDue').textContent = T.money(dueSoFar);
+    $('mDueLabel').textContent = finalCalled ? 'Your total cost' : (mo && mo.calls.length ? 'Asked for so far' : 'Deposit');
     $('mPaid').textContent = T.money(r.totals.confirmed);
-    $('mClaimed').textContent = T.money(r.totals.claimed);
+    $('mOwes').textContent = T.money(left);
+    $('mOwesLabel').textContent = r.totals.claimed ? 'To pay now (after ' + T.money(r.totals.claimed) + ' being checked)' : 'To pay now';
+    $('callNotes').innerHTML = b.status !== 'Booked' || !mo ? '' : mo.calls.map(function (c) {
+      return '<div class="notice small"><b>' + (c.stage === 'Final' ? 'Final balance called' : 'Interim payment: ' + T.money(c.perPerson) + ' per person') + '</b>' +
+        (c.dueDate ? ', due by ' + esc(T.niceDate(c.dueDate)) : '') + (c.reason ? '. ' + esc(c.reason) : '') + '</div>';
+    }).join('');
     $('moneyNote').textContent = b.status !== 'Booked' ? '' : left > 0
-      ? T.money(left) + ' of your deposit is still to pay, within ' + t.depositDays + ' days of registering. Interim and final amounts will appear here when the organiser calls them.'
-      : r.totals.confirmed < b.depositDue
+      ? (finalCalled ? 'This is your final balance: your share of what the trip actually cost, less what you have paid.'
+        : mo && mo.calls.length ? 'Please pay the amount above by the due date.' : 'Please pay your deposit within ' + t.depositDays + ' days of registering.') +
+        ' Use your reference so we can find it, then tap “I’ve paid”.'
+      : r.totals.claimed
         ? 'Thanks. The organiser will check your payment against the bank statement, then it moves to “Paid and checked”.'
-        : 'Deposit paid, thank you. Interim and final amounts will appear here when the organiser calls them.';
+        : finalCalled ? 'All paid, thank you!' : 'You’re up to date, thank you. Any interim or final payment will appear here when the organiser asks for it.';
+
+    // Breakdown of the costs entered so far: the trip runs at cost, so everyone can see where their money goes.
+    var people = row ? row.people.filter(function (p) { return p.lines.length; }) : [];
+    $('breakdown').hidden = !people.length;
+    $('breakdownBody').innerHTML = !people.length ? '' :
+      '<p class="small muted" style="margin:0">Your share of the costs entered so far' + (finalCalled ? '' : '. The final amount is confirmed after the trip, once every cost is in') + '.</p>' +
+      people.map(function (p) {
+        return '<div><b>' + esc(p.name) + '</b><table class="plain">' + p.lines.map(function (l) {
+          return '<tr><td>' + esc(l.name) + '</td><td style="text-align:right">' + T.money(l.amount) + '</td></tr>'; }).join('') +
+          '<tr><td><b>Total</b></td><td style="text-align:right"><b>' + T.money(p.total) + '</b></td></tr></table></div>';
+      }).join('') +
+      (row.people.length > 1 ? '<div class="row" style="justify-content:space-between"><b>Your booking in total</b><b>' + T.money(row.cost) + '</b></div>' : '') +
+      '<details class="more"><summary>All trip costs</summary><table class="plain">' + mo.expenses.map(function (e) {
+        return '<tr><td>' + esc(e.name) + '<br><span class="small muted">' + esc(e.describe) + '</span></td><td style="text-align:right">' + T.money(e.total) + '</td></tr>'; }).join('') +
+        (mo.charityFee > 0 ? '<tr><td>Charity fee<br><span class="small muted">' + T.money(mo.charityFee) + ' per rider, to a charity the riders choose</span></td><td></td></tr>' : '') + '</table></details>';
     $('paymentsWrap').hidden = !r.payments.length;
     $('payments').innerHTML = r.payments.map(function (p) {
       return '<tr><td>' + esc(T.niceDate(p.paidOn)) + '</td><td>' + esc(p.stage) + '</td><td>' + T.money(p.amount) + '</td><td><span class="chip ' + (p.status === 'Confirmed' ? 'ok' : 'warn') + '">' + (p.status === 'Confirmed' ? 'Checked' : 'Being checked') + '</span></td></tr>';
@@ -46,7 +72,7 @@
     copyValues = { name: r.bank.accountName, sort: String(r.bank.sortCode).replace(/\D/g, ''), account: String(r.bank.accountNumber).replace(/\D/g, ''), ref: b.ref };
     $('cAmount').value = left > 0 ? String(left) : '';
     $('cStage').innerHTML = T.STAGES.map(function (s) { return '<option>' + s + '</option>'; }).join('');
-    $('cStage').value = left > 0 ? 'Deposit' : 'Interim';
+    $('cStage').value = finalCalled ? 'Final' : mo && mo.calls.length ? 'Interim' : 'Deposit';
     $('cDate').value = T.today();
 
     $('routesCard').hidden = !(t.routes && t.routes.length);
@@ -83,7 +109,8 @@
   }
   function fail(msg) {
     $('loading').hidden = true;
-    $('loadError').innerHTML = esc(msg) + ' <button type="button" class="linkbtn" onclick="location.reload()">Try again</button>';
+    $('loadError').innerHTML = esc(msg) + ' <button type="button" class="linkbtn" onclick="location.reload()">Try again</button>' +
+      '<br><a href="/trips/#lost">Lost your link? We can email it to you.</a>';
     $('loadError').hidden = false;
   }
 
