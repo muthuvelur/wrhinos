@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>W/Rhinos Trips</title>
+<meta name="description" content="W/Rhinos Cycling Club trips: details, places left and registration.">
+<meta name="theme-color" content="#161616">
+<link rel="manifest" href="/trips/manifest.webmanifest">
+<link rel="icon" type="image/png" href="/img/favicon.png">
+<link rel="apple-touch-icon" href="/img/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="W/Rhinos">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta property="og:title" content="W/Rhinos Trips">
+<meta property="og:description" content="Trip details, places left and registration.">
+<meta property="og:image" content="https://wrhinos.com/img/badge.png">
+<link rel="stylesheet" href="/fonts/fonts.css">
+<link rel="stylesheet" href="/trips/trips.css">
+</head>
+<body>
+<header class="bar">
+  <div class="wrap">
+    <a class="wordmark" href="/trips/"><img src="/img/badge.png" alt="" width="34" height="34"><span>W<span class="slash">/</span>Rhinos</span><small>Trips</small></a>
+    <div class="right"><a class="lnk" href="/">Club site</a></div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="loading" id="loading"><span class="spinner"></span><span id="loadingText">Loading trips…</span></div>
+  <div class="error" id="loadError" hidden></div>
+
+  <!-- list of trips -->
+  <section id="listView" class="stack" hidden>
+    <div>
+      <p class="eyebrow">W/Rhinos Cycling Club</p>
+      <h1 class="page-title">Trips</h1>
+      <p class="lead">Read about each trip, see how many places are left, and register everyone in your group in one go.</p>
+    </div>
+    <div id="mine" class="card stack" hidden>
+      <h2 class="section-title">Your bookings</h2>
+      <div id="mineList" class="stack"></div>
+    </div>
+    <div id="tripList" class="trips"></div>
+  </section>
+
+  <!-- one trip -->
+  <section id="tripView" class="stack" hidden>
+    <a href="/trips/" class="small">← All trips</a>
+    <div>
+      <p class="eyebrow" id="tDates"></p>
+      <h1 class="page-title" id="tName"></h1>
+      <p class="lead" id="tSummary"></p>
+    </div>
+    <div class="card places" id="placesCard">
+      <div class="big" id="placesBig"></div>
+      <div class="meter" aria-hidden="true"><span id="placesMeter"></span></div>
+      <div class="small muted" id="placesNote"></div>
+      <div class="row"><a class="btn btn-primary" href="#register" id="registerTop">Register</a></div>
+    </div>
+    <div class="card stack" id="routesCard" hidden>
+      <h2 class="section-title">Routes</h2>
+      <ul class="routes" id="routes"></ul>
+    </div>
+    <article class="md" id="tDetails"></article>
+  </section>
+
+  <!-- registration -->
+  <section id="registerView" class="stack" hidden>
+    <a href="#" class="small" id="backToTrip">← Back to the trip details</a>
+    <div>
+      <p class="eyebrow" id="rTrip"></p>
+      <h1 class="page-title">Register</h1>
+      <p class="lead">Everyone going needs a place: riders, non-riders, children and support crew. Register your whole family or group here in one go.</p>
+    </div>
+    <form id="regForm" class="stack" novalidate>
+      <fieldset class="stack">
+        <legend class="section-title">Who's going</legend>
+        <div id="people" class="stack"></div>
+        <button type="button" class="btn btn-line" id="addPerson">+ Add another person</button>
+      </fieldset>
+
+      <fieldset class="card stack">
+        <legend class="section-title">Your contact details</legend>
+        <div class="field"><label for="email">Email</label><input type="email" id="email" autocomplete="email"><span class="hint">Your booking link and payment details are sent here.</span></div>
+        <div class="field"><label for="address">Home address</label><input type="text" id="address" autocomplete="street-address"></div>
+        <div class="field"><label for="postcode">Postcode</label><input type="text" id="postcode" autocomplete="postal-code"></div>
+      </fieldset>
+
+      <fieldset class="card stack">
+        <legend class="section-title">Emergency contact</legend>
+        <p class="hint" style="margin:0">Someone at home, not on the trip, we can call if anyone in your booking is hurt or unwell.</p>
+        <div class="field"><label for="emergencyName">Name</label><input type="text" id="emergencyName"></div>
+        <div class="grid2">
+          <div class="field"><label for="emergencyRelation">Relationship</label><input type="text" id="emergencyRelation" placeholder="e.g. sister"></div>
+          <div class="field"><label for="emergencyMobile">Mobile</label><input type="tel" id="emergencyMobile"></div>
+        </div>
+      </fieldset>
+
+      <fieldset class="card stack">
+        <legend class="section-title">Rooms and anything else</legend>
+        <div class="field"><label for="roomRequests">Room sharing requests</label><textarea id="roomRequests" placeholder="e.g. family room for the four of us, or happy to share a twin with Raj"></textarea>
+          <span class="hint">Requests, not promises: rooms are allocated once the hotels confirm. A single room costs more than a shared one.</span></div>
+        <div class="field"><label for="notes">Anything else the organiser should know (optional)</label><textarea id="notes"></textarea></div>
+      </fieldset>
+
+      <fieldset class="card stack">
+        <legend class="section-title">Before you register</legend>
+        <label class="check"><input type="checkbox" id="a_members"><span>Everyone in this booking is a W/Rhinos member, or will join before the trip. <a href="https://forms.gle/cbHLRxi53QGC8Hys6" target="_blank" rel="noopener">Membership form</a></span></label>
+        <label class="check"><input type="checkbox" id="a_readDetails"><span>I've read the trip details and the club's <a href="/#framework" target="_blank" rel="noopener">Framework</a>.</span></label>
+        <label class="check"><input type="checkbox" id="a_insurance"><span>Everyone will have travel insurance that covers cycling. The club does not insure us personally.</span></label>
+        <label class="check"><input type="checkbox" id="a_costs"><span>The deposit is non-refundable. The trip runs at cost: the final amount is worked out after the trip, plus £50 per rider for a charity the riders choose.</span></label>
+        <label class="check"><input type="checkbox" id="a_privacy"><span>I agree to the club holding these details as set out in its <a href="/privacy/" target="_blank" rel="noopener">privacy notice</a>.</span></label>
+      </fieldset>
+
+      <div class="hp" aria-hidden="true" style="position:absolute;left:-9999px"><label for="website">Leave empty</label><input type="text" id="website" tabindex="-1" autocomplete="off"></div>
+
+      <div class="error" id="regError" role="alert" hidden></div>
+
+      <div class="notice stack" id="fullPanel" hidden>
+        <div id="fullText"></div>
+        <div class="row">
+          <button type="button" class="btn btn-primary" id="joinWaiting">Join the waiting list together</button>
+          <button type="button" class="btn btn-line" id="cancelWaiting">Go back</button>
+        </div>
+      </div>
+
+      <div class="card stack" id="submitCard">
+        <div id="regSummary" class="small"></div>
+        <button type="submit" class="btn btn-primary btn-block" id="submitBtn"><span class="spinner" id="submitSpin" hidden></span><span id="submitText">Register</span></button>
+        <p class="small muted" id="slowHint" hidden style="margin:0">Still working… the booking system can take up to 30 seconds to wake up. Please don't close this page.</p>
+      </div>
+    </form>
+  </section>
+
+  <!-- after registering -->
+  <section id="resultView" class="stack" hidden>
+    <div>
+      <p class="eyebrow" id="resTrip"></p>
+      <h1 class="page-title" id="resTitle"></h1>
+      <p class="lead" id="resLead"></p>
+    </div>
+    <div class="card stack paybox" id="payCard">
+      <h2 class="section-title">Pay your deposit</h2>
+      <p class="small" style="margin:0">By bank transfer to the club account, within <b id="resDays"></b> days. Use exactly this reference so we can find your payment.</p>
+      <dl>
+        <dt>Amount</dt><dd id="resAmount"></dd><button type="button" class="copy" data-copy="amount">Copy</button>
+        <dt>Account name</dt><dd id="resAccName"></dd><button type="button" class="copy" data-copy="name">Copy</button>
+        <dt>Sort code</dt><dd id="resSort"></dd><button type="button" class="copy" data-copy="sort">Copy</button>
+        <dt>Account no.</dt><dd id="resAcc"></dd><button type="button" class="copy" data-copy="account">Copy</button>
+        <dt>Reference</dt><dd class="ref" id="resRef"></dd><button type="button" class="copy" data-copy="ref">Copy</button>
+      </dl>
+      <p class="small muted" style="margin:0">Once you've paid, open your booking page and tap <b>I've paid</b>.</p>
+    </div>
+    <div class="card stack">
+      <h2 class="section-title">Your booking page</h2>
+      <p class="small" style="margin:0">Your private link: it shows what you've paid and what's due, and lets you update details like passports and bikes later. Anyone with the link can see your booking, so don't share it.</p>
+      <div class="linkbox"><code id="resLink"></code><button type="button" class="copy" id="copyLink">Copy</button></div>
+      <a class="btn btn-primary" id="openBooking" href="#">Open my booking</a>
+      <p class="small muted" id="resEmail" style="margin:0"></p>
+    </div>
+  </section>
+</main>
+
+<div class="actionbar" id="actionbar" hidden>
+  <div class="info"><b id="abPlaces"></b><span class="muted" id="abNote"></span></div>
+  <a class="btn btn-primary" href="#register" id="abRegister">Register</a>
+</div>
+
+<script src="/trips/config.js"></script>
+<script src="/trips/common.js"></script>
+<script src="/trips/trip.js"></script>
+</body>
+</html>

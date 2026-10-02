@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>W/Rhinos Organiser</title>
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#161616">
+<link rel="manifest" href="/trips/manifest.webmanifest">
+<link rel="icon" type="image/png" href="/img/favicon.png">
+<link rel="apple-touch-icon" href="/img/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Organiser">
+<link rel="stylesheet" href="/fonts/fonts.css">
+<link rel="stylesheet" href="/trips/trips.css">
+</head>
+<body>
+<header class="bar">
+  <div class="wrap">
+    <a class="wordmark" href="/trips/organiser/"><img src="/img/badge.png" alt="" width="34" height="34"><span>W<span class="slash">/</span>Rhinos</span><small>Organiser</small></a>
+    <div class="right"><button type="button" class="linkbtn" id="logout" hidden style="color:var(--band-muted)">Lock</button></div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="loginView" class="stack" hidden>
+    <h1 class="page-title">Organiser</h1>
+    <form id="loginForm" class="card stack" novalidate>
+      <div class="field"><label for="pass">Organiser passcode</label><input type="password" id="pass" autocomplete="current-password"></div>
+      <div class="error" id="loginError" hidden></div>
+      <button type="submit" class="btn btn-primary" id="loginBtn">Open</button>
+      <p class="small muted" style="margin:0">The passcode is in the Settings tab of the club’s trips Google Sheet.</p>
+    </form>
+  </section>
+
+  <div class="loading" id="loading" hidden><span class="spinner"></span><span>Loading…</span></div>
+  <div class="notice" id="problems" hidden></div>
+
+  <section id="tripsView" class="stack" hidden>
+    <div class="row" style="justify-content:space-between"><h1 class="page-title">Trips</h1><button type="button" class="btn btn-primary btn-small" id="newTrip">+ New trip</button></div>
+    <div id="tripCards" class="trips"></div>
+  </section>
+
+  <section id="tripView" class="stack" hidden>
+    <a href="#" class="small" id="backTrips">← All trips</a>
+    <div>
+      <p class="eyebrow" id="oDates"></p>
+      <h1 class="page-title" id="oName"></h1>
+      <div class="row"><span class="chip" id="oStatus"></span><a class="small" id="oPublic" target="_blank" rel="noopener">Open public page ↗</a><button type="button" class="linkbtn small" id="oCopy">Copy link to share</button></div>
+    </div>
+    <div class="tabs" role="tablist">
+      <button type="button" class="tab" role="tab" data-tab="bookings" aria-selected="true">Bookings</button>
+      <button type="button" class="tab" role="tab" data-tab="edit" aria-selected="false">Trip details</button>
+    </div>
+
+    <div id="bookingsTab" class="stack">
+      <div class="stats" id="stats"></div>
+      <div class="filters" id="filters"></div>
+      <input type="text" id="search" placeholder="Search name, reference or email">
+      <div id="bookingList" class="stack"></div>
+    </div>
+
+    <div id="editTab" class="stack" hidden></div>
+  </section>
+
+  <section id="newView" class="stack" hidden>
+    <a href="#" class="small" id="backNew">← All trips</a>
+    <h1 class="page-title">New trip</h1>
+    <div id="newForm" class="stack"></div>
+  </section>
+</main>
+
+<script src="/trips/config.js"></script>
+<script src="/trips/common.js"></script>
+<script src="/trips/organiser/organiser.js"></script>
+</body>
+</html>

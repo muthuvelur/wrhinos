@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>My W/Rhinos Booking</title>
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#161616">
+<link rel="manifest" href="/trips/manifest.webmanifest">
+<link rel="icon" type="image/png" href="/img/favicon.png">
+<link rel="apple-touch-icon" href="/img/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="W/Rhinos">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="stylesheet" href="/fonts/fonts.css">
+<link rel="stylesheet" href="/trips/trips.css">
+</head>
+<body>
+<header class="bar">
+  <div class="wrap">
+    <a class="wordmark" href="/trips/"><img src="/img/badge.png" alt="" width="34" height="34"><span>W<span class="slash">/</span>Rhinos</span><small>Trips</small></a>
+    <div class="right"><a class="lnk" href="/trips/">All trips</a></div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="loading" id="loading"><span class="spinner"></span><span>Loading your booking…</span></div>
+  <div class="error" id="loadError" hidden></div>
+
+  <section id="view" class="stack" hidden>
+    <div>
+      <p class="eyebrow" id="bDates"></p>
+      <h1 class="page-title" id="bTrip"></h1>
+      <div class="row"><span class="chip" id="bStatus"></span><span class="small muted">Booking <b id="bRef"></b> · <span id="bCount"></span></span></div>
+    </div>
+
+    <div class="notice" id="waitingNote" hidden>You’re on the waiting list. We’ll email you if places come up. Please don’t pay anything until then.</div>
+    <div class="error" id="cancelledNote" hidden>This booking has been cancelled. If that’s a mistake, please contact the organiser.</div>
+
+    <div class="card stack" id="moneyCard">
+      <h2 class="section-title">Payments</h2>
+      <div class="money">
+        <div><b id="mDue"></b><span>Deposit due</span></div>
+        <div><b id="mPaid"></b><span>Paid and checked</span></div>
+        <div><b id="mClaimed"></b><span>Waiting to be checked</span></div>
+      </div>
+      <p class="small muted" style="margin:0" id="moneyNote"></p>
+      <div class="table-wrap" id="paymentsWrap" hidden>
+        <table class="plain"><thead><tr><th scope="col">Paid on</th><th scope="col">For</th><th scope="col">Amount</th><th scope="col">Status</th></tr></thead><tbody id="payments"></tbody></table>
+      </div>
+    </div>
+
+    <div class="card stack paybox" id="payCard" hidden>
+      <h2 class="section-title">How to pay</h2>
+      <p class="small" style="margin:0">Bank transfer to the club account. Always use your reference so we can find your payment.</p>
+      <dl>
+        <dt>Account name</dt><dd id="pName"></dd><button type="button" class="copy" data-copy="name">Copy</button>
+        <dt>Sort code</dt><dd id="pSort"></dd><button type="button" class="copy" data-copy="sort">Copy</button>
+        <dt>Account no.</dt><dd id="pAcc"></dd><button type="button" class="copy" data-copy="account">Copy</button>
+        <dt>Reference</dt><dd class="ref" id="pRef"></dd><button type="button" class="copy" data-copy="ref">Copy</button>
+      </dl>
+      <button type="button" class="btn btn-primary" id="paidBtn">I’ve paid</button>
+      <form id="claimForm" class="stack" hidden novalidate>
+        <div class="grid2">
+          <div class="field"><label for="cAmount">Amount you paid (£)</label><input type="text" inputmode="decimal" id="cAmount"></div>
+          <div class="field"><label for="cStage">What it was for</label><select id="cStage"></select></div>
+        </div>
+        <div class="field"><label for="cDate">Date you paid</label><input type="date" id="cDate"></div>
+        <div class="field"><label for="cNote">Note (optional)</label><input type="text" id="cNote" placeholder="e.g. paid from my partner’s account"></div>
+        <div class="error" id="claimError" hidden></div>
+        <div class="row"><button type="submit" class="btn btn-primary" id="claimSubmit">Tell the organiser</button><button type="button" class="btn btn-line" id="claimCancel">Cancel</button></div>
+        <p class="small muted" style="margin:0">The organiser checks it against the club’s bank statement, then it moves to “Paid and checked”.</p>
+      </form>
+    </div>
+
+    <div class="card stack" id="routesCard" hidden>
+      <h2 class="section-title">Routes</h2>
+      <ul class="routes" id="routes"></ul>
+    </div>
+
+    <div class="card stack">
+      <div class="row" style="justify-content:space-between"><h2 class="section-title">Who’s going</h2><button type="button" class="btn btn-line btn-small" id="editBtn">Edit details</button></div>
+      <div id="peopleList" class="stack"></div>
+    </div>
+
+    <div class="card stack">
+      <h2 class="section-title">Contact and emergency</h2>
+      <dl class="kv" id="contact"></dl>
+    </div>
+
+    <div class="card stack" id="homeCard">
+      <h2 class="section-title">Keep this on your phone</h2>
+      <p class="small" style="margin:0" id="homeText">Add this page to your home screen and it opens like an app, straight to your booking.</p>
+      <button type="button" class="btn btn-line" id="installBtn" hidden>Add to home screen</button>
+    </div>
+
+    <p class="small"><a id="tripLink" href="/trips/">Read the full trip details →</a></p>
+  </section>
+
+  <section id="editView" class="stack" hidden>
+    <a href="#" class="small" id="editBack">← Back to my booking</a>
+    <h1 class="page-title">Edit details</h1>
+    <p class="lead">Add passports and bike details when you have them. To add or remove people, contact the organiser.</p>
+    <form id="editForm" class="stack" novalidate>
+      <div id="editPeople" class="stack"></div>
+      <fieldset class="card stack">
+        <legend class="section-title">Contact details</legend>
+        <div class="field"><label for="email">Email</label><input type="email" id="email" autocomplete="email"></div>
+        <div class="field"><label for="address">Home address</label><input type="text" id="address" autocomplete="street-address"></div>
+        <div class="field"><label for="postcode">Postcode</label><input type="text" id="postcode" autocomplete="postal-code"></div>
+      </fieldset>
+      <fieldset class="card stack">
+        <legend class="section-title">Emergency contact</legend>
+        <div class="field"><label for="emergencyName">Name</label><input type="text" id="emergencyName"></div>
+        <div class="grid2">
+          <div class="field"><label for="emergencyRelation">Relationship</label><input type="text" id="emergencyRelation"></div>
+          <div class="field"><label for="emergencyMobile">Mobile</label><input type="tel" id="emergencyMobile"></div>
+        </div>
+      </fieldset>
+      <fieldset class="card stack">
+        <legend class="section-title">Rooms and notes</legend>
+        <div class="field"><label for="roomRequests">Room sharing requests</label><textarea id="roomRequests"></textarea></div>
+        <div class="field"><label for="notes">Notes for the organiser</label><textarea id="notes"></textarea></div>
+      </fieldset>
+      <div class="error" id="editError" hidden></div>
+      <div class="row"><button type="submit" class="btn btn-primary" id="saveBtn">Save changes</button><button type="button" class="btn btn-line" id="editCancel">Cancel</button></div>
+    </form>
+  </section>
+</main>
+
+<script src="/trips/config.js"></script>
+<script src="/trips/common.js"></script>
+<script src="/trips/booking/booking.js"></script>
+</body>
+</html>

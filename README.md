@@ -11,6 +11,7 @@ Live: https://muthuvelur.github.io/wrhinos/ (GitHub Pages, served from `main`).
 - Fonts are self-hosted in `fonts/` (no Google Fonts requests)
 - Document text: extracted from `source-docs/` into `src/framework.txt` and `src/constitution.xml`
 - Rebuild `index.html`: `node src/build.js`
+- Trips (registration, bookings, organiser): `trips/` pages + `backend/` Google Apps Script. See `backend/README.md`
 
 If a document changes, re-extract it:
 
