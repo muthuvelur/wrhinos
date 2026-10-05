@@ -41,6 +41,14 @@ const SEED_TRIP = {
   routes: 'Day 1: Frankfurt – St Goar | \nDay 2: St Goar – Bonn | \nDay 3: Bonn – Düsseldorf | ',
   organiser: 'Ram Sugavanam',
   charityFee: 50,
+  depositAtSignup: 'No',
+  bikeOptions: [
+    'Hire a carbon road bike (about €100–180) | hire',
+    'Hire a road e-bike (about €180–200) | hire',
+    'Hire a hybrid bike | hire',
+    'Hire a hybrid e-bike | hire',
+    'Bring my own bike | own',
+  ].join('\n'),
 };
 
 const TABLES = {
@@ -49,6 +57,7 @@ const TABLES = {
     ['places', 'Places'], ['depositPerPerson', 'Deposit per person (£)'], ['depositDays', 'Days to pay deposit'],
     ['summary', 'One-line summary'], ['details', 'Trip details'], ['routes', 'Route links'], ['organiser', 'Organiser'],
     ['createdAt', 'Created'], ['updatedAt', 'Updated'], ['charityFee', 'Charity fee per rider (£)'],
+    ['depositAtSignup', 'Deposit at sign-up?'], ['bikeOptions', 'Bike options'],
   ],
   Expenses: [
     ['id', 'Expense ID'], ['tripId', 'Trip ID'], ['name', 'Expense'], ['split', 'How shared'], ['amount', 'Amount (£)'],
@@ -65,6 +74,7 @@ const TABLES = {
     ['emergencyName', 'Emergency contact'], ['emergencyRelation', 'Relationship'], ['emergencyMobile', 'Emergency mobile'],
     ['people', 'People'], ['depositDue', 'Deposit due (£)'], ['roomRequests', 'Room requests'], ['notes', 'Notes from booker'],
     ['organiserNotes', 'Organiser notes'], ['token', 'Link key (do not share)'], ['updatedAt', 'Updated'],
+    ['roomType', 'Room preference'],
   ],
   People: [
     ['ref', 'Booking ref'], ['tripId', 'Trip ID'], ['n', 'No.'], ['fullName', 'Name as in passport'], ['dob', 'Date of birth'],
@@ -72,6 +82,8 @@ const TABLES = {
     ['dietary', 'Dietary needs'], ['bikeType', 'Bike type'], ['bikeMake', 'Bike make'], ['bikeColour', 'Bike colour'],
     ['bikeSerial', 'Bike serial'], ['passportNumber', 'Passport number'], ['passportCountry', 'Passport country'],
     ['passportExpiry', 'Passport expiry'], ['safetyInfo', 'Safety / health info'],
+    ['bikeChoice', 'Bike choice'], ['bikeHire', 'Hiring a bike'], ['heightCm', 'Height (cm)'], ['insideLegCm', 'Inside leg (cm)'],
+    ['frameSize', 'Usual frame size'], ['saddleHeightCm', 'Saddle height (cm)'], ['pedals', 'Pedals'],
   ],
   Payments: [
     ['id', 'Payment ID'], ['ref', 'Booking ref'], ['tripId', 'Trip ID'], ['stage', 'Stage'], ['amount', 'Amount (£)'],
@@ -85,6 +97,9 @@ const BOOKING_STATUSES = ['Booked', 'Waiting list', 'Cancelled'];
 const ROLES = ['Rider', 'Non-rider', 'Support crew'];
 const BIKE_TYPES = ['Road', 'Hybrid', 'Gravel', 'Mountain', 'Road e-bike', 'Hybrid e-bike', 'Other', 'Not bringing a bike'];
 const STAGES = ['Deposit', 'Interim', 'Final', 'Other'];
+const ROOM_TYPES = ['Single room (supplement)', 'Twin share', 'Double'];
+const PEDALS = ['Shimano SPD-SL', 'Look Kéo', 'Shimano SPD', 'Speedplay or Wahoo', 'None, flat pedals please'];
+const DEFAULT_BIKE_OPTIONS = 'Bring my own bike | own';
 const MAX_PEOPLE_PER_BOOKING = 8;
 
 // Payment references are 5 letters shaped like a name (e.g. RAKIM): easy to say, read and type into a bank app.
@@ -167,6 +182,22 @@ function depositFor_(people, perPerson) {
   return round2_(people.filter(function (p) { return p.role !== 'Support crew'; }).length * (Number(perPerson) || 0));
 }
 
+// Bike choices are set per trip, one per line: "Hire a road e-bike (about €180–200) | hire" or "Bring my own bike | own".
+function parseBikeOptions_(text) {
+  return String(text || DEFAULT_BIKE_OPTIONS).split('\n').map(function (line) {
+    const i = line.lastIndexOf('|');
+    const label = clean_(i === -1 ? line : line.slice(0, i), 120);
+    const kind = clean_(i === -1 ? '' : line.slice(i + 1), 10).toLowerCase();
+    return { label: label, hire: kind === 'hire' };
+  }).filter(function (o) { return o.label; });
+}
+
+function yesNo_(v, dflt) {
+  if (v === true || v === 'Yes' || v === 'yes') return 'Yes';
+  if (v === false || v === 'No' || v === 'no') return 'No';
+  return dflt;
+}
+
 function validateTrip_(input, existingIds) {
   const errors = [];
   input = input || {};
@@ -184,6 +215,8 @@ function validateTrip_(input, existingIds) {
     routes: cleanMulti_(input.routes, 5000),
     organiser: clean_(input.organiser, 80),
     charityFee: input.charityFee === undefined || input.charityFee === '' ? 50 : Number(input.charityFee),
+    depositAtSignup: yesNo_(input.depositAtSignup, 'No'),
+    bikeOptions: cleanMulti_(input.bikeOptions, 2000),
   };
   if (t.name.length < 3) errors.push('Give the trip a name.');
   if (isNaN(t.charityFee) || t.charityFee < 0 || t.charityFee > 500) errors.push('The charity fee per rider must be from £0 to £500.');
@@ -192,23 +225,34 @@ function validateTrip_(input, existingIds) {
   if (!Number.isInteger(t.places) || t.places < 1 || t.places > 500) errors.push('Places must be a whole number from 1 to 500.');
   if (isNaN(t.depositPerPerson) || t.depositPerPerson < 0 || t.depositPerPerson > 5000) errors.push('Deposit per person must be from £0 to £5,000.');
   if (!Number.isInteger(t.depositDays) || t.depositDays < 1 || t.depositDays > 60) errors.push('Days to pay the deposit must be from 1 to 60.');
+  if (t.bikeOptions && !parseBikeOptions_(t.bikeOptions).length) errors.push('Bike options: one per line, e.g. "Hire a hybrid bike | hire".');
   if (t.id && existingIds && !existingIds[t.id]) errors.push('That trip no longer exists. Reload the organiser page.');
   t.depositPerPerson = round2_(t.depositPerPerson || 0);
   t.charityFee = round2_(t.charityFee || 0);
   return { errors: errors, value: t };
 }
 
+// One person's answers. Sign-up asks only what the trip form asks; passports and own-bike details come later.
 function validatePerson_(p, i, trip, isLead) {
   const errors = [];
   const who = isLead ? 'Your details' : 'Person ' + (i + 1);
   p = p || {};
+  const options = parseBikeOptions_(trip.bikeOptions);
+  const choice = options.filter(function (o) { return o.label === clean_(p.bikeChoice, 120); })[0];
   const v = {
     fullName: clean_(p.fullName, 100),
     dob: isoDate_(p.dob),
-    role: ROLES.indexOf(p.role) === -1 ? '' : p.role,
+    role: ROLES.indexOf(p.role) === -1 ? 'Rider' : p.role,
     responsibleAdult: clean_(p.responsibleAdult, 100),
     mobile: normaliseMobile_(p.mobile),
     dietary: clean_(p.dietary, 200),
+    bikeChoice: choice ? choice.label : '',
+    bikeHire: choice ? (choice.hire ? 'Yes' : 'No') : '',
+    heightCm: clean_(p.heightCm, 10),
+    insideLegCm: clean_(p.insideLegCm, 10),
+    frameSize: clean_(p.frameSize, 20),
+    saddleHeightCm: clean_(p.saddleHeightCm, 10),
+    pedals: PEDALS.indexOf(p.pedals) === -1 ? '' : p.pedals,
     bikeType: BIKE_TYPES.indexOf(p.bikeType) === -1 ? '' : p.bikeType,
     bikeMake: clean_(p.bikeMake, 60),
     bikeColour: clean_(p.bikeColour, 40),
@@ -218,22 +262,25 @@ function validatePerson_(p, i, trip, isLead) {
     passportExpiry: isoDate_(p.passportExpiry),
     safetyInfo: clean_(p.safetyInfo, 500),
   };
-  if (v.fullName.length < 2) errors.push(who + ': enter the full name as it appears in the passport.');
+  if (v.fullName.length < 2) errors.push(who + ': enter the full name.');
   if (!v.dob) errors.push(who + ': enter a date of birth.');
-  if (!v.role) errors.push(who + ': choose rider, non-rider or support crew.');
-  if (v.role !== 'Non-rider' && !v.bikeType) errors.push(who + ': choose a bike type (or "Not bringing a bike").');
+  if (v.role === 'Rider' && !v.bikeChoice) errors.push(who + ': choose a bike option.');
+  if (v.role === 'Non-rider') { v.bikeChoice = ''; v.bikeHire = ''; }
+  if (v.bikeHire !== 'Yes') { v.heightCm = ''; v.insideLegCm = ''; v.frameSize = ''; v.saddleHeightCm = ''; v.pedals = ''; }
   const age = ageOn_(v.dob, trip.startDate);
   if (v.dob && (age === null || age < 0 || age > 110)) errors.push(who + ': check the date of birth.');
   v.under18 = age !== null && age < 18;
   if (v.under18 && v.role === 'Rider' && age < 10) errors.push(who + ': riders must be at least 10 on the first day of the trip.');
   if (v.under18 && v.responsibleAdult.length < 2) errors.push(who + ' is under 18: name the parent or authorised adult responsible for them on the trip.');
   if (isLead && v.under18) errors.push('The person registering must be 18 or over.');
-  if (isLead && !validMobile_(v.mobile)) errors.push('Your details: enter a valid mobile number.');
-  if (!isLead && v.mobile && !validMobile_(v.mobile)) errors.push(who + ': check the mobile number, or leave it empty.');
+  if (isLead && !validMobile_(v.mobile)) errors.push('Your details: enter a valid phone number.');
+  if (!isLead && v.mobile && !validMobile_(v.mobile)) errors.push(who + ': check the phone number, or leave it empty.');
   if (v.passportExpiry && v.passportExpiry < trip.startDate) errors.push(who + ': the passport expires before the trip. Leave the passport fields empty and add a new one later.');
   if (!v.under18) v.responsibleAdult = '';
   return { errors: errors, value: v };
 }
+
+const AGREEMENTS = ['charter', 'deposit', 'insurance', 'members'];
 
 function validateRegistration_(input, trip) {
   const errors = [];
@@ -242,19 +289,18 @@ function validateRegistration_(input, trip) {
   const people = Array.isArray(input.people) ? input.people : [];
   const b = {
     email: clean_(lead.email, 120).toLowerCase(),
-    address: clean_(lead.address, 200),
+    address: cleanMulti_(lead.address, 300).replace(/\n+/g, ', '),
     postcode: clean_(lead.postcode, 12).toUpperCase(),
     emergencyName: clean_(lead.emergencyName, 100),
     emergencyRelation: clean_(lead.emergencyRelation, 60),
     emergencyMobile: normaliseMobile_(lead.emergencyMobile),
+    roomType: ROOM_TYPES.indexOf(input.roomType) === -1 ? '' : input.roomType,
     roomRequests: clean_(input.roomRequests, 500),
     notes: clean_(input.notes, 1000),
   };
   if (!isEmail_(b.email)) errors.push('Enter a valid email address.');
   if (b.address.length < 5) errors.push('Enter your home address.');
-  if (b.postcode.length < 4) errors.push('Enter your postcode.');
-  if (b.emergencyName.length < 2) errors.push('Enter an emergency contact who is not coming on the trip.');
-  if (!validMobile_(b.emergencyMobile)) errors.push('Enter a valid mobile number for your emergency contact.');
+  if (b.emergencyMobile && !validMobile_(b.emergencyMobile)) errors.push('Check the emergency contact number.');
   if (people.length < 1) errors.push('Add at least one person.');
   if (people.length > MAX_PEOPLE_PER_BOOKING) errors.push('One booking can have up to ' + MAX_PEOPLE_PER_BOOKING + ' people. Make a second booking for the rest.');
 
@@ -280,15 +326,26 @@ function validateRegistration_(input, trip) {
     }
   });
   const agree = input.agree || {};
-  ['members', 'readDetails', 'insurance', 'costs', 'privacy'].forEach(function (k) {
-    if (agree[k] !== true) errors.push('Please tick every box in the last section.');
-  });
+  if (AGREEMENTS.some(function (k) { return agree[k] !== true; })) errors.push('Please tick every box in the small print.');
 
   b.leadName = list.length ? list[0].fullName : '';
   b.mobile = list.length ? list[0].mobile : '';
   b.people = list.length;
   b.depositDue = depositFor_(list, trip.depositPerPerson);
   return { errors: errors.filter(function (e, i, a) { return a.indexOf(e) === i; }), booking: b, people: list };
+}
+
+// What a booking still needs to give us once deposits and details have been asked for.
+function missingDetails_(people, booking) {
+  const out = [];
+  people.forEach(function (p) {
+    const first = String(p.fullName);
+    if (!p.passportNumber) out.push(first + ': passport details');
+    if (p.role !== 'Non-rider' && p.bikeHire === 'No' && !p.bikeMake) out.push(first + ': bike make and colour');
+    if (p.bikeHire === 'Yes' && !(p.heightCm && p.insideLegCm)) out.push(first + ': height and inside leg for the hire bike');
+  });
+  if (!booking.emergencyName || !booking.emergencyMobile) out.push('Emergency contact');
+  return out;
 }
 
 function findDuplicate_(bookings, peopleByRef, tripId, b, people, nowMs) {
@@ -340,7 +397,9 @@ function buildRegistrationEmail_(b, people, trip, cfg, link) {
     '',
     'YOUR BOOKING: ' + b.ref + ' (' + people.length + (people.length === 1 ? ' person' : ' people') + ')',
   ].concat(people.map(function (p) { return '  ' + p.fullName + ' - ' + p.role + (p.under18 ? ' (under 18)' : ''); }));
-  if (!waiting && b.depositDue > 0) {
+  if (!waiting && trip.depositAtSignup === 'No') {
+    lines.push('', 'NOTHING TO PAY YET. Once the trip is confirmed we will ask for your deposit (' + money_(b.depositDue) + ') and the rest of the details we need, such as passports. We will post in the group and it will show on your booking page.');
+  } else if (!waiting && b.depositDue > 0) {
     lines.push('', 'PLEASE PAY THE DEPOSIT WITHIN ' + trip.depositDays + ' DAYS, BY BANK TRANSFER',
       '  Amount:            ' + money_(b.depositDue),
       '  Account name:      ' + cfg.bankAccountName,
@@ -398,7 +457,11 @@ function payLines_(amount, ref, cfg) {
 function buildCallEmail_(b, row, call, trip, cfg, link) {
   const final = call.stage === 'Final';
   const lines = ['Hello ' + String(b.leadName).split(' ')[0] + ',', ''];
-  if (final) {
+  if (call.stage === 'Deposit') {
+    lines.push('Good news: ' + trip.name + ' is confirmed! To keep your place, please pay your deposit and add the rest of your details',
+      '(passports, and bike details if you are bringing your own) on your booking page.', '',
+      'The deposit is non-refundable.');
+  } else if (final) {
     lines.push('Thank you for riding ' + trip.name + '. All the costs are now in, and your final balance is ready.', '',
       'Total cost for your booking: ' + money_(row.cost), 'Already paid: ' + money_(row.confirmed));
   } else {
@@ -406,7 +469,7 @@ function buildCallEmail_(b, row, call, trip, cfg, link) {
   }
   lines.push('', 'PLEASE PAY ' + money_(row.owesNow) + (call.dueDate ? ' BY ' + call.dueDate : '') + ', BY BANK TRANSFER');
   return {
-    subject: (final ? 'Final balance: ' : 'Payment due: ') + trip.name + ' (' + b.ref + ')',
+    subject: (call.stage === 'Deposit' ? 'Trip confirmed, deposit due: ' : final ? 'Final balance: ' : 'Payment due: ') + trip.name + ' (' + b.ref + ')',
     body: lines.concat(payLines_(row.owesNow, b.ref, cfg), ['',
       'Your booking page shows exactly what each cost was and your share of it:', link, '',
       'Once you have paid, tap "I\'ve paid" on that page.', '', cfg.clubName]).join('\n'),
@@ -503,7 +566,7 @@ function tripMoney_(trip) {
   const id = trip.id;
   const of = function (name) { return readTable_(name).filter(function (x) { return x.tripId === id; }); };
   const bookings = of('Bookings'), people = of('People'), payments = of('Payments'), expenses = of('Expenses'), calls = of('Calls');
-  const t = { charityFee: trip.charityFee === '' || trip.charityFee === undefined ? 50 : Number(trip.charityFee) };
+  const t = { charityFee: trip.charityFee === '' || trip.charityFee === undefined ? 50 : Number(trip.charityFee), depositAtSignup: trip.depositAtSignup === 'Yes' ? 'Yes' : 'No' };
   return { bookings: bookings, people: people, payments: payments, expenses: expenses, calls: calls,
     result: Money.balances(t, bookings, people, payments, expenses, calls) };
 }
@@ -565,6 +628,8 @@ function publicTrip_(t, bookings) {
     places: Number(t.places), placesLeft: left, depositPerPerson: Number(t.depositPerPerson), depositDays: Number(t.depositDays),
     summary: t.summary, details: t.details, routes: parseRoutes_(t.routes), organiser: t.organiser,
     charityFee: t.charityFee === '' || t.charityFee === undefined ? 50 : Number(t.charityFee),
+    depositAtSignup: t.depositAtSignup === 'Yes' ? 'Yes' : 'No', bikeOptionsText: t.bikeOptions || '',
+    bikeOptions: parseBikeOptions_(t.bikeOptions), roomTypes: ROOM_TYPES, pedals: PEDALS,
     waiting: bookings.filter(function (b) { return b.tripId === t.id && b.status === 'Waiting list'; }).length,
   };
 }
@@ -696,7 +761,7 @@ function bookingView_(b) {
   const totals = paymentTotals_(payments, b.ref);
   const booking = {};
   ['ref', 'tripId', 'status', 'bookedAt', 'leadName', 'email', 'mobile', 'address', 'postcode', 'emergencyName',
-    'emergencyRelation', 'emergencyMobile', 'people', 'depositDue', 'roomRequests', 'notes'].forEach(function (k) { booking[k] = b[k]; });
+    'emergencyRelation', 'emergencyMobile', 'people', 'depositDue', 'roomType', 'roomRequests', 'notes'].forEach(function (k) { booking[k] = b[k]; });
   booking.people = Number(b.people);
   booking.depositDue = Number(b.depositDue);
   let money = null;
@@ -704,14 +769,15 @@ function bookingView_(b) {
     const m = tripMoney_(trip);
     const row = m.result.bookings.filter(function (x) { return x.ref === b.ref; })[0];
     money = {
-      row: row, finalCalled: m.result.finalCalled, charityFee: Number(trip.charityFee === '' ? 50 : trip.charityFee),
+      row: row, finalCalled: m.result.finalCalled, depositAsked: m.result.depositAsked, missing: missingDetails_(people, b), charityFee: Number(trip.charityFee === '' ? 50 : trip.charityFee),
       calls: m.calls.map(function (c) { return { stage: c.stage, reason: c.reason, perPerson: Number(c.perPerson) || 0, dueDate: c.dueDate, createdAt: c.createdAt }; }),
       expenses: m.result.expenses.map(function (e) { return { id: e.id, name: e.name, total: e.total, describe: e.describe }; }),
     };
   }
   return {
     ok: true, booking: booking, people: people, payments: payments, totals: totals, bank: bank_(cfg), money: money,
-    trip: trip ? { id: trip.id, name: trip.name, datesText: trip.datesText, startDate: trip.startDate, depositDays: Number(trip.depositDays), status: trip.status, routes: parseRoutes_(trip.routes) } : null,
+    trip: trip ? { id: trip.id, name: trip.name, datesText: trip.datesText, startDate: trip.startDate, depositDays: Number(trip.depositDays), status: trip.status, routes: parseRoutes_(trip.routes),
+      depositAtSignup: trip.depositAtSignup === 'Yes' ? 'Yes' : 'No', bikeOptions: parseBikeOptions_(trip.bikeOptions), roomTypes: ROOM_TYPES, pedals: PEDALS } : null,
   };
 }
 
@@ -739,7 +805,8 @@ function updateBooking_(input) {
   if (people.length !== existing.length) return { ok: false, error: 'To add or remove people, please contact the organiser.' };
   const v = validateRegistration_({
     lead: input.lead, people: people, roomRequests: input.roomRequests, notes: input.notes,
-    agree: { members: true, readDetails: true, insurance: true, costs: true, privacy: true },
+    roomType: input.roomType,
+    agree: { charter: true, deposit: true, insurance: true, members: true },
   }, trip);
   if (v.errors.length) return { ok: false, error: v.errors.join(' '), errors: v.errors };
   const nb = Object.assign({}, b, v.booking, { leadName: v.booking.leadName, depositDue: b.depositDue, people: b.people, updatedAt: new Date().toISOString() });
@@ -792,12 +859,14 @@ function admin_(input) {
     case 'trips': {
       const bookings = readTable_('Bookings');
       const payments = readTable_('Payments');
+      const calls = readTable_('Calls');
       return {
         ok: true, problems: cfg.problems,
         trips: readTable_('Trips').map(function (t) {
           const x = publicTrip_(t, bookings);
           x.routesText = t.routes;
           x.claimed = payments.filter(function (p) { return p.tripId === t.id && p.status === 'Claimed'; }).length;
+          x.depositAsked = t.depositAtSignup === 'Yes' || calls.some(function (c) { return c.tripId === t.id && c.stage === 'Deposit'; });
           return x;
         }),
       };
@@ -900,7 +969,7 @@ function admin_(input) {
         expenses: m.expenses.map(function (e) { return { id: e.id, name: e.name, split: e.split, amount: Number(e.amount), detail: Money.parseDetail(e.detail), date: e.date, paidBy: e.paidBy, notes: e.notes }; }),
         calls: m.calls.map(function (c) { return { id: c.id, stage: c.stage, reason: c.reason, perPerson: Number(c.perPerson) || 0, dueDate: c.dueDate, createdAt: c.createdAt, emailed: c.emailed }; }),
         people: m.people.filter(function (p) { return live[p.ref]; }).map(function (p) {
-          return { key: Money.personKey(p.ref, p.n), ref: p.ref, n: Number(p.n), name: p.fullName, role: p.role, bikeType: p.bikeType, under18: p.under18 };
+          return { key: Money.personKey(p.ref, p.n), ref: p.ref, n: Number(p.n), name: p.fullName, role: p.role, bikeType: p.bikeType, bikeHire: p.bikeHire, under18: p.under18 };
         }),
         bookings: m.bookings.map(function (b) { return { ref: b.ref, status: b.status, leadName: b.leadName, email: b.email, mobile: b.mobile, link: bookingLink_(cfg.siteUrl, b.ref, b.token) }; }),
       };
@@ -933,10 +1002,11 @@ function admin_(input) {
     case 'call': {
       const trip = tripById_(String(input.tripId || ''));
       if (!trip) return { ok: false, error: 'Trip not found.' };
-      const stage = input.stage === 'Final' ? 'Final' : input.stage === 'Interim' ? 'Interim' : '';
+      const stage = ['Deposit', 'Interim', 'Final'].indexOf(input.stage) === -1 ? '' : input.stage;
       const call = { id: Utilities.getUuid().slice(0, 8), tripId: trip.id, stage: stage, reason: clean_(input.reason, 300),
         perPerson: round2_(Number(input.perPerson) || 0), dueDate: isoDate_(input.dueDate), createdAt: new Date().toISOString() };
-      if (!stage) return { ok: false, error: 'Choose interim or final.' };
+      if (!stage) return { ok: false, error: 'Choose deposit, interim or final.' };
+      if (stage === 'Deposit' && readTable_('Calls').some(function (c) { return c.tripId === trip.id && c.stage === 'Deposit'; })) return { ok: false, error: 'Deposits have already been asked for.' };
       if (stage === 'Interim' && (!(call.perPerson > 0) || call.reason.length < 3)) return { ok: false, error: 'An interim payment needs an amount per person and a reason, e.g. "Hotels need paying 6 weeks before".' };
       if (stage === 'Final' && readTable_('Calls').some(function (c) { return c.tripId === trip.id && c.stage === 'Final'; })) return { ok: false, error: 'The final balance has already been called. Use "Remind everyone who owes" instead.' };
       if (!call.dueDate) return { ok: false, error: 'Choose the date it is due by.' };
@@ -1037,6 +1107,6 @@ if (typeof module !== 'undefined') {
     findDuplicate_: findDuplicate_, paymentTotals_: paymentTotals_, validateClaim_: validateClaim_, bookingLink_: bookingLink_,
     buildRegistrationEmail_: buildRegistrationEmail_, buildPlaceOfferedEmail_: buildPlaceOfferedEmail_, parseSettings_: parseSettings_,
     buildCallEmail_: buildCallEmail_, buildReminderEmail_: buildReminderEmail_, buildLinksEmail_: buildLinksEmail_,
-    safeCell_: safeCell_, REF_BLOCKED: REF_BLOCKED,
+    safeCell_: safeCell_, REF_BLOCKED: REF_BLOCKED, parseBikeOptions_: parseBikeOptions_, missingDetails_: missingDetails_,
   };
 }

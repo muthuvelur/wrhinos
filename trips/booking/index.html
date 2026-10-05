@@ -38,6 +38,12 @@
     <div class="notice" id="waitingNote" hidden>You’re on the waiting list. We’ll email you if places come up. Please don’t pay anything until then.</div>
     <div class="error" id="cancelledNote" hidden>This booking has been cancelled. If that’s a mistake, please contact the organiser.</div>
 
+    <div class="card stack" id="nextCard" hidden style="border-color:var(--mark)">
+      <h2 class="section-title">Next steps</h2>
+      <ul id="nextList" style="margin:0;padding-left:1.2em"></ul>
+      <button type="button" class="btn btn-primary" id="nextEdit">Add your details</button>
+    </div>
+
     <div class="card stack" id="moneyCard">
       <h2 class="section-title">Payments</h2>
       <div class="money">
@@ -109,8 +115,7 @@
       <fieldset class="card stack">
         <legend class="section-title">Contact details</legend>
         <div class="field"><label for="email">Email</label><input type="email" id="email" autocomplete="email"></div>
-        <div class="field"><label for="address">Home address</label><input type="text" id="address" autocomplete="street-address"></div>
-        <div class="field"><label for="postcode">Postcode</label><input type="text" id="postcode" autocomplete="postal-code"></div>
+        <div class="field"><label for="address">Address</label><textarea id="address" rows="3" autocomplete="street-address"></textarea></div>
       </fieldset>
       <fieldset class="card stack">
         <legend class="section-title">Emergency contact</legend>
@@ -122,7 +127,8 @@
       </fieldset>
       <fieldset class="card stack">
         <legend class="section-title">Rooms and notes</legend>
-        <div class="field"><label for="roomRequests">Room sharing requests</label><textarea id="roomRequests"></textarea></div>
+        <div class="field"><label for="roomType">I would prefer a</label><select id="roomType"></select></div>
+        <div class="field"><label for="roomRequests">Who you'd like to share with</label><input type="text" id="roomRequests"></div>
         <div class="field"><label for="notes">Notes for the organiser</label><textarea id="notes"></textarea></div>
       </fieldset>
       <div class="error" id="editError" hidden></div>

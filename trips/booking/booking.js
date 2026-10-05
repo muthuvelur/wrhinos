@@ -28,16 +28,30 @@
     var dueSoFar = row ? row.dueSoFar : b.depositDue;
     var left = Math.max(0, Math.round((dueSoFar - r.totals.confirmed - r.totals.claimed) * 100) / 100);
     var finalCalled = mo && mo.finalCalled;
+    var asked = !mo || mo.depositAsked !== false || dueSoFar > 0;
     $('mDue').textContent = T.money(dueSoFar);
-    $('mDueLabel').textContent = finalCalled ? 'Your total cost' : (mo && mo.calls.length ? 'Asked for so far' : 'Deposit');
+    $('mDueLabel').textContent = finalCalled ? 'Your total cost' : !asked ? 'Asked for so far' : (mo && mo.calls.some(function (c) { return c.stage !== 'Deposit'; }) ? 'Asked for so far' : 'Deposit');
+
+    // Next steps: once the trip is confirmed, pay the deposit and fill in what sign-up didn't ask for.
+    var todo = [];
+    if (b.status === 'Booked' && asked) {
+      if (left > 0) todo.push('Pay ' + T.money(left) + ' by bank transfer (details below), then tap “I’ve paid”');
+      (mo && mo.missing || []).forEach(function (m) { todo.push(m.indexOf(': ') > -1 ? m.replace(': ', ': add ') : 'Add an ' + m.toLowerCase()); });
+    }
+    $('nextCard').hidden = !todo.length;
+    document.querySelector('#moneyCard .money').hidden = !asked && !r.payments.length;
+    $('nextList').innerHTML = todo.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('');
+    $('nextEdit').hidden = !(mo && mo.missing && mo.missing.length);
     $('mPaid').textContent = T.money(r.totals.confirmed);
     $('mOwes').textContent = T.money(left);
     $('mOwesLabel').textContent = r.totals.claimed ? 'To pay now (after ' + T.money(r.totals.claimed) + ' being checked)' : 'To pay now';
     $('callNotes').innerHTML = b.status !== 'Booked' || !mo ? '' : mo.calls.map(function (c) {
-      return '<div class="notice small"><b>' + (c.stage === 'Final' ? 'Final balance called' : 'Interim payment: ' + T.money(c.perPerson) + ' per person') + '</b>' +
+      return '<div class="notice small"><b>' + (c.stage === 'Deposit' ? 'Trip confirmed: deposit now due' : c.stage === 'Final' ? 'Final balance called' : 'Interim payment: ' + T.money(c.perPerson) + ' per person') + '</b>' +
         (c.dueDate ? ', due by ' + esc(T.niceDate(c.dueDate)) : '') + (c.reason ? '. ' + esc(c.reason) : '') + '</div>';
     }).join('');
-    $('moneyNote').textContent = b.status !== 'Booked' ? '' : left > 0
+    $('moneyNote').textContent = b.status !== 'Booked' ? '' : !asked
+      ? 'Nothing to pay yet. Once the trip is confirmed we’ll ask for your deposit of ' + T.money(b.depositDue) + ' and a few more details, like passports. It will show here, and we’ll post in the group.'
+      : left > 0
       ? (finalCalled ? 'This is your final balance: your share of what the trip actually cost, less what you have paid.'
         : mo && mo.calls.length ? 'Please pay the amount above by the due date.' : 'Please pay your deposit within ' + t.depositDays + ' days of registering.') +
         ' Use your reference so we can find it, then tap “I’ve paid”.'
@@ -64,7 +78,7 @@
       return '<tr><td>' + esc(T.niceDate(p.paidOn)) + '</td><td>' + esc(p.stage) + '</td><td>' + T.money(p.amount) + '</td><td><span class="chip ' + (p.status === 'Confirmed' ? 'ok' : 'warn') + '">' + (p.status === 'Confirmed' ? 'Checked' : 'Being checked') + '</span></td></tr>';
     }).join('');
 
-    $('payCard').hidden = b.status !== 'Booked';
+    $('payCard').hidden = b.status !== 'Booked' || !asked;
     $('pName').textContent = r.bank.accountName;
     $('pSort').textContent = r.bank.sortCode;
     $('pAcc').textContent = r.bank.accountNumber;
@@ -72,7 +86,7 @@
     copyValues = { name: r.bank.accountName, sort: String(r.bank.sortCode).replace(/\D/g, ''), account: String(r.bank.accountNumber).replace(/\D/g, ''), ref: b.ref };
     $('cAmount').value = left > 0 ? String(left) : '';
     $('cStage').innerHTML = T.STAGES.map(function (s) { return '<option>' + s + '</option>'; }).join('');
-    $('cStage').value = finalCalled ? 'Final' : mo && mo.calls.length ? 'Interim' : 'Deposit';
+    $('cStage').value = finalCalled ? 'Final' : mo && mo.calls.some(function (c) { return c.stage === 'Interim'; }) && r.totals.confirmed >= b.depositDue ? 'Interim' : 'Deposit';
     $('cDate').value = T.today();
 
     $('routesCard').hidden = !(t.routes && t.routes.length);
@@ -81,19 +95,17 @@
     }).join('');
 
     $('peopleList').innerHTML = r.people.map(function (p) {
-      var missing = [];
-      if (!p.passportNumber) missing.push('passport');
-      if (p.role !== 'Non-rider' && p.bikeType !== 'Not bringing a bike' && !p.bikeMake) missing.push('bike make');
+      var sizing = p.bikeHire === 'Yes' ? [p.heightCm ? p.heightCm + ' cm tall' : '', p.insideLegCm ? 'inside leg ' + p.insideLegCm + ' cm' : '', p.pedals].filter(Boolean).join(', ') : '';
       return '<div style="border-top:1px solid var(--rule);padding-top:10px"><div class="row" style="justify-content:space-between"><b>' + esc(p.fullName) + '</b><span class="chip">' + esc(p.role) + (p.under18 === 'Yes' ? ' · under 18' : '') + '</span></div>' +
-        '<div class="small muted">' + [p.bikeType, p.bikeMake, p.dietary ? 'Diet: ' + p.dietary : ''].filter(Boolean).map(esc).join(' · ') +
-        (p.under18 === 'Yes' && p.responsibleAdult ? '<br>Responsible adult: ' + esc(p.responsibleAdult) : '') + '</div>' +
-        (missing.length ? '<div class="small" style="color:var(--warn);margin-top:4px">Still needed: ' + missing.join(', ') + '</div>' : '') + '</div>';
+        '<div class="small muted">' + [p.bikeChoice || p.bikeType, sizing, p.bikeMake, p.dietary ? 'Diet: ' + p.dietary : ''].filter(Boolean).map(esc).join(' · ') +
+        (p.under18 === 'Yes' && p.responsibleAdult ? '<br>Responsible adult: ' + esc(p.responsibleAdult) : '') +
+        (p.passportNumber ? '<br>Passport added ✓' : '') + '</div></div>';
     }).join('');
 
     $('contact').innerHTML = [
-      ['Email', b.email], ['Mobile', b.mobile], ['Address', [b.address, b.postcode].filter(Boolean).join(', ')],
-      ['Emergency', [b.emergencyName, b.emergencyRelation ? '(' + b.emergencyRelation + ')' : '', b.emergencyMobile].filter(Boolean).join(' ')],
-      ['Rooms', b.roomRequests || '—'],
+      ['Email', b.email], ['Phone', b.mobile], ['Address', [b.address, b.postcode].filter(Boolean).join(', ')],
+      ['Emergency', [b.emergencyName, b.emergencyRelation ? '(' + b.emergencyRelation + ')' : '', b.emergencyMobile].filter(Boolean).join(' ') || '—'],
+      ['Room', [b.roomType, b.roomRequests ? 'sharing with ' + b.roomRequests : ''].filter(Boolean).join(', ') || '—'],
     ].map(function (kv) { return '<dt>' + kv[0] + '</dt><dd>' + esc(kv[1]) + '</dd>'; }).join('');
     $('tripLink').href = '/trips/?t=' + encodeURIComponent(t.id || '');
 
@@ -135,15 +147,19 @@
   // ---------- edit ----------
   function openEdit() {
     var b = data.booking;
-    $('editPeople').innerHTML = data.people.map(function (p, i) { return T.personHtml(i, p, i === 0); }).join('');
+    $('editPeople').innerHTML = data.people.map(function (p, i) { return T.personHtml(i, p, i === 0, data.trip, true); }).join('');
     Array.prototype.forEach.call($('editPeople').children, function (card) { T.wirePerson(card, data.trip.startDate); });
-    ['email', 'address', 'postcode', 'emergencyName', 'emergencyRelation', 'emergencyMobile', 'roomRequests', 'notes'].forEach(function (k) { $(k).value = b[k] || ''; });
+    ['email', 'emergencyName', 'emergencyRelation', 'emergencyMobile', 'roomRequests', 'notes'].forEach(function (k) { $(k).value = b[k] || ''; });
+    $('address').value = [b.address, b.postcode].filter(Boolean).join(', ');
+    $('roomType').innerHTML = '<option value="">No preference</option>' + (data.trip.roomTypes || ['Single room (supplement)', 'Twin share', 'Double']).map(function (r) {
+      return '<option' + (b.roomType === r ? ' selected' : '') + '>' + esc(r) + '</option>'; }).join('');
     T.errorBox($('editError'), []);
     $('view').hidden = true; $('editView').hidden = false;
     window.scrollTo(0, 0);
   }
   function closeEdit() { $('editView').hidden = true; $('view').hidden = false; window.scrollTo(0, 0); }
   $('editBtn').addEventListener('click', openEdit);
+  $('nextEdit').addEventListener('click', openEdit);
   $('editBack').addEventListener('click', function (e) { e.preventDefault(); closeEdit(); });
   $('editCancel').addEventListener('click', closeEdit);
   $('editForm').addEventListener('submit', function (e) {
@@ -154,7 +170,8 @@
     if (errs.length) return;
     $('saveBtn').disabled = true;
     call({ action: 'update', people: people, roomRequests: $('roomRequests').value.trim(), notes: $('notes').value.trim(),
-      lead: { email: $('email').value.trim(), address: $('address').value.trim(), postcode: $('postcode').value.trim(), emergencyName: $('emergencyName').value.trim(), emergencyRelation: $('emergencyRelation').value.trim(), emergencyMobile: $('emergencyMobile').value.trim() },
+      roomType: $('roomType').value,
+      lead: { email: $('email').value.trim(), address: $('address').value.trim(), emergencyName: $('emergencyName').value.trim(), emergencyRelation: $('emergencyRelation').value.trim(), emergencyMobile: $('emergencyMobile').value.trim() },
     }).then(function (r) {
       if (!r || !r.ok) { T.errorBox($('editError'), r && r.errors ? r.errors : [(r && r.error) || 'That didn’t save. Please try again.']); return; }
       render(r); window.scrollTo(0, 0); T.toast('Saved');

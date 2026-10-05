@@ -116,57 +116,83 @@
     } catch (e) { /* storage blocked: the email still has the link */ }
   }
 
-  // ---------- person form (used for registering and for editing) ----------
+  // ---------- person form (sign-up asks what the trip form asks; editing adds passports and own-bike details) ----------
+  var DIETS = ['None', 'Vegetarian', 'Vegan', 'Kosher', 'Halal', 'Gluten-free'];
+  var DEFAULT_PEDALS = ['Shimano SPD-SL', 'Look Kéo', 'Shimano SPD', 'Speedplay or Wahoo', 'None, flat pedals please'];
   function opts(list, selected, placeholder) {
     return (placeholder ? '<option value="">' + esc(placeholder) + '</option>' : '') +
       list.map(function (x) { return '<option' + (x === selected ? ' selected' : '') + '>' + esc(x) + '</option>'; }).join('');
   }
-  function personHtml(i, p, isLead) {
+  function bikeOptionsOf(trip) {
+    var o = trip && trip.bikeOptions;
+    return o && o.length ? o : [{ label: 'Bring my own bike', hire: false }];
+  }
+  function personHtml(i, p, isLead, trip, editing) {
     p = p || {};
     var id = function (k) { return 'p' + i + '_' + k; };
     var v = function (k) { return esc(p[k] || ''); };
+    var diet = p.dietary || '';
+    var dietOther = diet && DIETS.indexOf(diet) === -1;
+    var bikes = bikeOptionsOf(trip);
     return '' +
       '<div class="card stack person" data-i="' + i + '">' +
       '<div class="person-head"><h3>' + (isLead ? 'You' : 'Person ' + (i + 1)) + '</h3>' +
-      (isLead ? '' : '<button type="button" class="linkbtn remove-person">Remove</button>') + '</div>' +
-      '<div class="field"><label for="' + id('fullName') + '">Full name, as in passport</label>' +
-      '<input type="text" id="' + id('fullName') + '" data-k="fullName" autocomplete="' + (isLead ? 'name' : 'off') + '" value="' + v('fullName') + '"></div>' +
+      (isLead || editing ? '' : '<button type="button" class="linkbtn remove-person">Remove</button>') + '</div>' +
+      '<div class="field"><label for="' + id('fullName') + '">Name</label>' +
+      '<input type="text" id="' + id('fullName') + '" data-k="fullName" autocomplete="' + (isLead ? 'name' : 'off') + '" value="' + v('fullName') + '">' +
+      '<span class="hint">As it appears in the passport.</span></div>' +
       '<div class="grid2">' +
       '<div class="field"><label for="' + id('dob') + '">Date of birth</label><input type="date" id="' + id('dob') + '" data-k="dob" value="' + v('dob') + '"></div>' +
-      '<div class="field"><label for="' + id('role') + '">Going as</label><select id="' + id('role') + '" data-k="role">' + opts(ROLES, p.role || (isLead ? '' : ''), 'Choose…') + '</select></div>' +
+      '<div class="field"><label for="' + id('mobile') + '">Phone number' + (isLead ? '' : ' (optional)') + '</label><input type="tel" id="' + id('mobile') + '" data-k="mobile" autocomplete="' + (isLead ? 'tel' : 'off') + '" value="' + v('mobile') + '"></div>' +
       '</div>' +
       '<div class="field adult-field" hidden><label for="' + id('responsibleAdult') + '">Adult responsible for them on the trip</label>' +
       '<input type="text" id="' + id('responsibleAdult') + '" data-k="responsibleAdult" value="' + v('responsibleAdult') + '">' +
       '<span class="hint">Under 18 on the first day of the trip. Name the parent, or the adult the parents have named in writing.</span></div>' +
-      '<div class="grid2">' +
-      '<div class="field"><label for="' + id('mobile') + '">Mobile' + (isLead ? '' : ' (optional)') + '</label><input type="tel" id="' + id('mobile') + '" data-k="mobile" autocomplete="' + (isLead ? 'tel' : 'off') + '" value="' + v('mobile') + '"></div>' +
-      '<div class="field"><label for="' + id('dietary') + '">Dietary needs</label><input type="text" id="' + id('dietary') + '" data-k="dietary" placeholder="e.g. vegetarian, no beef, none" value="' + v('dietary') + '"></div>' +
-      '</div>' +
-      '<div class="field bike-type-field"><label for="' + id('bikeType') + '">Bike</label><select id="' + id('bikeType') + '" data-k="bikeType">' + opts(BIKE_TYPES, p.bikeType, 'Choose…') + '</select></div>' +
-      '<details class="more bike-more"' + (p.bikeMake || p.bikeColour || p.bikeSerial ? ' open' : '') + '><summary>Bike make, colour and serial number</summary><div class="stack">' +
-      '<span class="hint">Helps us load and find bikes in the lorry. You can add it later.</span>' +
-      '<div class="grid2"><div class="field"><label for="' + id('bikeMake') + '">Make</label><input type="text" id="' + id('bikeMake') + '" data-k="bikeMake" value="' + v('bikeMake') + '"></div>' +
-      '<div class="field"><label for="' + id('bikeColour') + '">Colour</label><input type="text" id="' + id('bikeColour') + '" data-k="bikeColour" value="' + v('bikeColour') + '"></div></div>' +
-      '<div class="field"><label for="' + id('bikeSerial') + '">Serial number</label><input type="text" id="' + id('bikeSerial') + '" data-k="bikeSerial" value="' + v('bikeSerial') + '"></div>' +
-      '</div></details>' +
-      '<details class="more"' + (p.passportNumber ? ' open' : '') + '><summary>Passport details</summary><div class="stack">' +
-      '<span class="hint">Needed before the trip. Only the organiser sees them, and they are deleted after the trip. You can add them later from your booking page.</span>' +
-      '<div class="grid2"><div class="field"><label for="' + id('passportNumber') + '">Passport number</label><input type="text" id="' + id('passportNumber') + '" data-k="passportNumber" autocomplete="off" value="' + v('passportNumber') + '"></div>' +
-      '<div class="field"><label for="' + id('passportCountry') + '">Issuing country</label><input type="text" id="' + id('passportCountry') + '" data-k="passportCountry" value="' + v('passportCountry') + '"></div></div>' +
-      '<div class="field"><label for="' + id('passportExpiry') + '">Expiry date</label><input type="date" id="' + id('passportExpiry') + '" data-k="passportExpiry" value="' + v('passportExpiry') + '"></div>' +
-      '</div></details>' +
-      '<details class="more"' + (p.safetyInfo ? ' open' : '') + '><summary>Anything we should know for their safety (optional)</summary><div class="stack">' +
-      '<span class="hint">For example a condition or medication emergency responders would need to know about. Seen only by the Ride Coordinator and Deputy, and deleted within 30 days of the trip.</span>' +
-      '<div class="field"><label for="' + id('safetyInfo') + '" class="sr">Safety information</label><textarea id="' + id('safetyInfo') + '" data-k="safetyInfo">' + v('safetyInfo') + '</textarea></div>' +
-      '</div></details>' +
+      '<div class="field"><label for="' + id('role') + '">Going as</label><select id="' + id('role') + '" data-k="role">' + opts(ROLES, p.role || 'Rider') + '</select></div>' +
+      '<fieldset class="field bike-field"><legend class="label">Bike: I would prefer</legend>' +
+      bikes.map(function (o, j) {
+        return '<label class="check"><input type="radio" name="' + id('bike') + '" data-bike value="' + esc(o.label) + '" data-hire="' + (o.hire ? '1' : '') + '"' + (p.bikeChoice === o.label ? ' checked' : '') + '>' + esc(o.label) + '</label>';
+      }).join('') + '<input type="hidden" data-k="bikeChoice" value="' + v('bikeChoice') + '"></fieldset>' +
+      '<div class="card stack sizing" style="background:var(--ground)" hidden><b>Hire bike sizing</b>' +
+      '<div class="grid2 keep2"><div class="field"><label for="' + id('heightCm') + '">Height (cm)</label><input type="text" inputmode="numeric" id="' + id('heightCm') + '" data-k="heightCm" value="' + v('heightCm') + '"></div>' +
+      '<div class="field"><label for="' + id('insideLegCm') + '">Inside leg (cm)</label><input type="text" inputmode="numeric" id="' + id('insideLegCm') + '" data-k="insideLegCm" value="' + v('insideLegCm') + '"></div></div>' +
+      '<div class="grid2 keep2"><div class="field"><label for="' + id('frameSize') + '">Usual frame size</label><input type="text" id="' + id('frameSize') + '" data-k="frameSize" placeholder="e.g. 54 or M" value="' + v('frameSize') + '"></div>' +
+      '<div class="field"><label for="' + id('saddleHeightCm') + '">Saddle height (cm)</label><input type="text" inputmode="numeric" id="' + id('saddleHeightCm') + '" data-k="saddleHeightCm" value="' + v('saddleHeightCm') + '"></div></div>' +
+      '<div class="field"><label for="' + id('pedals') + '">Pedals you’re bringing</label><select id="' + id('pedals') + '" data-k="pedals">' + opts((trip && trip.pedals) || DEFAULT_PEDALS, p.pedals, 'Choose…') + '</select></div></div>' +
+      '<div class="grid2"><div class="field"><label for="' + id('dietSel') + '">Dietary needs</label><select id="' + id('dietSel') + '" data-diet>' +
+      opts(DIETS.concat(['Other']), dietOther ? 'Other' : diet, 'Choose…') + '</select></div>' +
+      '<div class="field diet-other"' + (dietOther ? '' : ' hidden') + '><label for="' + id('dietOther') + '">Tell us more</label><input type="text" id="' + id('dietOther') + '" data-diet-other value="' + (dietOther ? esc(diet) : '') + '"></div></div>' +
+      (editing ?
+        '<details class="more own-bike"' + (p.bikeMake ? ' open' : '') + '><summary>Your own bike</summary><div class="stack">' +
+        '<span class="hint">Helps us load and find bikes in the lorry.</span>' +
+        '<div class="grid2"><div class="field"><label for="' + id('bikeType') + '">Type</label><select id="' + id('bikeType') + '" data-k="bikeType">' + opts(BIKE_TYPES, p.bikeType, 'Choose…') + '</select></div>' +
+        '<div class="field"><label for="' + id('bikeMake') + '">Make</label><input type="text" id="' + id('bikeMake') + '" data-k="bikeMake" value="' + v('bikeMake') + '"></div></div>' +
+        '<div class="grid2"><div class="field"><label for="' + id('bikeColour') + '">Colour</label><input type="text" id="' + id('bikeColour') + '" data-k="bikeColour" value="' + v('bikeColour') + '"></div>' +
+        '<div class="field"><label for="' + id('bikeSerial') + '">Serial number (optional)</label><input type="text" id="' + id('bikeSerial') + '" data-k="bikeSerial" value="' + v('bikeSerial') + '"></div></div>' +
+        '</div></details>' +
+        '<details class="more"' + (p.passportNumber ? ' open' : '') + '><summary>Passport details</summary><div class="stack">' +
+        '<span class="hint">Only the organiser sees these, and they are deleted after the trip.</span>' +
+        '<div class="grid2"><div class="field"><label for="' + id('passportNumber') + '">Passport number</label><input type="text" id="' + id('passportNumber') + '" data-k="passportNumber" autocomplete="off" value="' + v('passportNumber') + '"></div>' +
+        '<div class="field"><label for="' + id('passportCountry') + '">Issuing country</label><input type="text" id="' + id('passportCountry') + '" data-k="passportCountry" value="' + v('passportCountry') + '"></div></div>' +
+        '<div class="field"><label for="' + id('passportExpiry') + '">Expiry date</label><input type="date" id="' + id('passportExpiry') + '" data-k="passportExpiry" value="' + v('passportExpiry') + '"></div>' +
+        '</div></details>' +
+        '<details class="more"' + (p.safetyInfo ? ' open' : '') + '><summary>Anything we should know for their safety (optional)</summary><div class="stack">' +
+        '<span class="hint">For example a condition or medication emergency responders would need to know about. Seen only by the Ride Coordinator and Deputy, and deleted within 30 days of the trip.</span>' +
+        '<div class="field"><label for="' + id('safetyInfo') + '" class="sr">Safety information</label><textarea id="' + id('safetyInfo') + '" data-k="safetyInfo">' + v('safetyInfo') + '</textarea></div>' +
+        '</div></details>'
+        : '') +
       '</div>';
   }
   function readPerson(card) {
     var p = {};
     Array.prototype.forEach.call(card.querySelectorAll('[data-k]'), function (el) { p[el.getAttribute('data-k')] = el.value.trim(); });
+    var picked = card.querySelector('[data-bike]:checked');
+    p.bikeChoice = picked ? picked.value : '';
+    var sel = card.querySelector('[data-diet]').value;
+    p.dietary = sel === 'Other' ? card.querySelector('[data-diet-other]').value.trim() || 'Other' : sel;
     return p;
   }
-  // Show the responsible-adult field for under-18s, and hide bike questions for non-riders.
+  // Show only what applies: responsible adult for under-18s, bikes for riders, sizing for hire bikes.
   function wirePerson(card, startDate) {
     var dob = card.querySelector('[data-k="dob"]');
     var role = card.querySelector('[data-k="role"]');
@@ -174,27 +200,29 @@
       var age = ageOn(dob.value, startDate);
       card.querySelector('.adult-field').hidden = !(age !== null && age < 18);
       var nonRider = role.value === 'Non-rider';
-      card.querySelector('.bike-type-field').hidden = nonRider;
-      card.querySelector('.bike-more').hidden = nonRider;
+      var picked = card.querySelector('[data-bike]:checked');
+      var hire = !!(picked && picked.getAttribute('data-hire'));
+      card.querySelector('.bike-field').hidden = nonRider;
+      card.querySelector('.sizing').hidden = nonRider || !hire;
+      var own = card.querySelector('.own-bike');
+      if (own) own.hidden = nonRider || hire;
+      card.querySelector('.diet-other').hidden = card.querySelector('[data-diet]').value !== 'Other';
     };
-    dob.addEventListener('change', update);
-    dob.addEventListener('input', update);
-    role.addEventListener('change', update);
+    ['input', 'change'].forEach(function (ev) { card.addEventListener(ev, update); });
     update();
   }
   function checkPeople(people, startDate) {
     var errs = [];
     people.forEach(function (p, i) {
       var who = i === 0 ? 'Your details' : 'Person ' + (i + 1);
-      if (p.fullName.length < 2) errs.push(who + ': enter the full name as it appears in the passport.');
+      if (p.fullName.length < 2) errs.push(who + ': enter the full name.');
       if (!p.dob) errs.push(who + ': enter a date of birth.');
-      if (!p.role) errs.push(who + ': choose rider, non-rider or support crew.');
-      if (p.role && p.role !== 'Non-rider' && !p.bikeType) errs.push(who + ': choose a bike type (or "Not bringing a bike").');
+      if (p.role === 'Rider' && !p.bikeChoice) errs.push(who + ': choose a bike option.');
       var age = ageOn(p.dob, startDate);
       if (age !== null && age < 18 && (p.responsibleAdult || '').length < 2) errs.push(who + ' is under 18: name the adult responsible for them on the trip.');
       if (age !== null && age < 10 && p.role === 'Rider') errs.push(who + ': riders must be at least 10 on the first day of the trip.');
       if (i === 0 && age !== null && age < 18) errs.push('The person registering must be 18 or over.');
-      if (i === 0 && p.mobile.replace(/\D/g, '').length < 10) errs.push('Your details: enter your mobile number.');
+      if (i === 0 && p.mobile.replace(/\D/g, '').length < 10) errs.push('Your details: enter your phone number.');
     });
     return errs;
   }
@@ -237,13 +265,14 @@
         var db = {
           trips: [{ id: 'rhine-2027', name: 'Castles to Cathedrals: The Rhine Explorer Ride', status: 'Open', datesText: 'Fri 28 May – Wed 2 June 2027', startDate: '2027-05-28', places: 50, depositPerPerson: 100, depositDays: 7,
             summary: 'Frankfurt to Düsseldorf along the Main and Rhine. Flat, family-friendly, riders aged 10 and up, e-bikes welcome.', details: md,
-            routes: 'Day 1: Frankfurt – St Goar | \nDay 2: St Goar – Bonn | \nDay 3: Bonn – Düsseldorf | ', organiser: 'Ram Sugavanam' }],
+            routes: 'Day 1: Frankfurt – St Goar | \nDay 2: St Goar – Bonn | \nDay 3: Bonn – Düsseldorf | ', organiser: 'Ram Sugavanam', charityFee: 50, depositAtSignup: 'No',
+            bikeOptions: ['Hire a carbon road bike (about €100–180) | hire', 'Hire a road e-bike (about €180–200) | hire', 'Hire a hybrid bike | hire', 'Hire a hybrid e-bike | hire', 'Bring my own bike | own'].join('\n') }],
           bookings: [], payments: [],
         };
         // A few example bookings so the places counter and organiser page have something to show.
         [['Example Family A', 4], ['Example Rider B', 1], ['Example Couple C', 2], ['Example Family D', 3], ['Example Rider E', 1]].forEach(function (x, i) {
           var ref = refGen(db);
-          var persons = []; for (var k = 0; k < x[1]; k++) persons.push({ n: k + 1, fullName: x[0] + (k ? ' ' + (k + 1) : ''), role: 'Rider', dob: k > 1 ? '2014-06-01' : '1982-03-0' + (k + 1), under18: k > 1 ? 'Yes' : 'No', responsibleAdult: k > 1 ? x[0] : '', bikeType: 'Hybrid', dietary: 'None', mobile: k ? '' : '0770090012' + i });
+          var persons = []; for (var k = 0; k < x[1]; k++) persons.push({ n: k + 1, fullName: x[0] + (k ? ' ' + (k + 1) : ''), role: 'Rider', dob: k > 1 ? '2014-06-01' : '1982-03-0' + (k + 1), under18: k > 1 ? 'Yes' : 'No', responsibleAdult: k > 1 ? x[0] : '', bikeChoice: k % 2 ? 'Hire a hybrid bike' : 'Bring my own bike', bikeHire: k % 2 ? 'Yes' : 'No', dietary: 'None', mobile: k ? '' : '0770090012' + i });
           db.bookings.push({ ref: ref, token: uid(20), tripId: 'rhine-2027', status: 'Booked', bookedAt: new Date(Date.now() - (9 - i) * 86400000).toISOString(), leadName: persons[0].fullName, email: 'example' + i + '@example.com', mobile: persons[0].mobile,
             address: '1 Example Road, Birmingham', postcode: 'B1 1AA', emergencyName: 'Example Contact', emergencyRelation: 'Friend', emergencyMobile: '07700900999', people: x[1], depositDue: x[1] * 100, roomRequests: '', notes: '', organiserNotes: '', persons: persons });
           if (i < 3) db.payments.push({ id: uid(8), ref: ref, tripId: 'rhine-2027', stage: 'Deposit', amount: x[1] * 100, paidOn: today(), status: i === 2 ? 'Claimed' : 'Confirmed', source: 'Rider' });
@@ -268,17 +297,24 @@
     };
     var taken = function (db, id) { return db.bookings.filter(function (b) { return b.tripId === id && b.status === 'Booked'; }).reduce(function (a, b) { return a + b.people; }, 0); };
     var routes = function (t) { return String(t.routes || '').split('\n').map(function (l) { var i = l.lastIndexOf('|'); var label = (i === -1 ? l : l.slice(0, i)).trim(); var url = (i === -1 ? '' : l.slice(i + 1)).trim(); return { label: label, url: /^https:\/\//.test(url) ? url : '' }; }).filter(function (r) { return r.label; }); };
-    var pub = function (db, t) { return Object.assign({}, t, { placesLeft: Math.max(0, t.places - taken(db, t.id)), routes: routes(t), waiting: db.bookings.filter(function (b) { return b.tripId === t.id && b.status === 'Waiting list'; }).length }); };
+    var bikeOpts = function (t) { return String(t.bikeOptions || 'Bring my own bike | own').split('\n').map(function (l) { var i = l.lastIndexOf('|'); return { label: (i === -1 ? l : l.slice(0, i)).trim(), hire: (i === -1 ? '' : l.slice(i + 1)).trim().toLowerCase() === 'hire' }; }).filter(function (o) { return o.label; }); };
+    var missing = function (b) {
+      var out = [];
+      (b.persons || []).forEach(function (p) { var f = String(p.fullName); if (!p.passportNumber) out.push(f + ': passport details'); if (p.role !== 'Non-rider' && p.bikeHire === 'No' && !p.bikeMake) out.push(f + ': bike make and colour'); if (p.bikeHire === 'Yes' && !(p.heightCm && p.insideLegCm)) out.push(f + ': height and inside leg for the hire bike'); });
+      if (!b.emergencyName || !b.emergencyMobile) out.push('Emergency contact');
+      return out;
+    };
+    var pub = function (db, t) { return Object.assign({}, t, { bikeOptionsText: t.bikeOptions || '', bikeOptions: bikeOpts(t), placesLeft: Math.max(0, t.places - taken(db, t.id)), routes: routes(t), waiting: db.bookings.filter(function (b) { return b.tripId === t.id && b.status === 'Waiting list'; }).length }); };
     var totals = function (db, ref) { var c = 0, l = 0; db.payments.forEach(function (p) { if (p.ref !== ref) return; if (p.status === 'Confirmed') c += +p.amount; else if (p.status === 'Claimed') l += +p.amount; }); return { confirmed: c, claimed: l }; };
     var link = function (b) { return location.origin + '/trips/booking/?r=' + b.ref + '&k=' + b.token; };
     var bank = { accountName: 'W/Rhinos Cycling Club', sortCode: '00-00-00', accountNumber: '00000000' };
     var view = function (db, b) {
       var t = db.trips.filter(function (x) { return x.id === b.tripId; })[0];
       var m = tripMoney(db, t);
-      var mo = { row: m.bookings.filter(function (x) { return x.ref === b.ref; })[0], finalCalled: m.finalCalled, charityFee: t.charityFee,
+      var mo = { row: m.bookings.filter(function (x) { return x.ref === b.ref; })[0], finalCalled: m.finalCalled, depositAsked: m.depositAsked, missing: missing(b), charityFee: t.charityFee,
         calls: db.calls.filter(function (c) { return c.tripId === t.id; }), expenses: m.expenses };
       return { ok: true, booking: b, people: b.persons, payments: db.payments.filter(function (p) { return p.ref === b.ref && p.status !== 'Rejected'; }), totals: totals(db, b.ref), bank: bank, money: mo,
-        trip: { id: t.id, name: t.name, datesText: t.datesText, startDate: t.startDate, depositDays: t.depositDays, status: t.status, routes: routes(t) } };
+        trip: { id: t.id, name: t.name, datesText: t.datesText, startDate: t.startDate, depositDays: t.depositDays, status: t.status, routes: routes(t), depositAtSignup: t.depositAtSignup, bikeOptions: bikeOpts(t) } };
     };
     var auth = function (db, x) { return db.bookings.filter(function (b) { return b.ref === String(x.ref || '').toUpperCase() && b.token === x.token; })[0]; };
     api = {
@@ -295,11 +331,11 @@
             var left = t.places - taken(db, t.id);
             var status = body.people.length <= left ? 'Booked' : 'Waiting list';
             if (status === 'Waiting list' && body.acceptWaitingList !== true) return { ok: false, full: true, placesLeft: Math.max(0, left), error: left > 0 ? 'Only ' + left + (left === 1 ? ' place is' : ' places are') + ' left and your booking needs ' + body.people.length + '.' : 'The trip is full.' };
-            var persons = body.people.map(function (p, i) { var age = ageOn(p.dob, t.startDate); return Object.assign({}, p, { n: i + 1, under18: age !== null && age < 18 ? 'Yes' : 'No' }); });
+            var persons = body.people.map(function (p, i) { var age = ageOn(p.dob, t.startDate); var o = bikeOpts(t).filter(function (x) { return x.label === p.bikeChoice; })[0]; return Object.assign({}, p, { n: i + 1, under18: age !== null && age < 18 ? 'Yes' : 'No', bikeHire: o ? (o.hire ? 'Yes' : 'No') : '' }); });
             b = Object.assign({}, body.lead, { ref: refGen(db), token: uid(20), tripId: t.id, status: status, bookedAt: new Date().toISOString(), leadName: persons[0].fullName, mobile: persons[0].mobile, people: persons.length,
-              depositDue: persons.filter(function (p) { return p.role !== 'Support crew'; }).length * t.depositPerPerson, roomRequests: body.roomRequests || '', notes: body.notes || '', organiserNotes: '', persons: persons });
+              depositDue: persons.filter(function (p) { return p.role !== 'Support crew'; }).length * t.depositPerPerson, roomType: body.roomType || '', roomRequests: body.roomRequests || '', notes: body.notes || '', organiserNotes: '', persons: persons });
             db.bookings.push(b); save(db);
-            return { ok: true, ref: b.ref, status: status, link: link(b), depositDue: b.depositDue, depositDays: t.depositDays, bank: bank, emailSent: false, email: b.email, preview: true };
+            return { ok: true, ref: b.ref, status: status, link: link(b), depositDue: b.depositDue, depositDays: t.depositDays, depositAtSignup: t.depositAtSignup, bank: bank, emailSent: false, email: b.email, preview: true };
           }
           if (body.action === 'booking') { b = auth(db, body); return b ? view(db, b) : { ok: false, error: 'This booking link is not recognised.' }; }
           if (body.action === 'claim') {
@@ -319,7 +355,8 @@
           if (body.action === 'admin') {
             if (body.pass !== PASS) return { ok: false, auth: false, error: 'Wrong passcode. In this preview the passcode is: ' + PASS };
             if (body.op === 'login') return { ok: true, problems: ['Preview mode: the Google Sheet is not connected yet, so nothing here is real or shared.'] };
-            if (body.op === 'trips') return { ok: true, problems: [], trips: db.trips.map(function (x) { return Object.assign(pub(db, x), { routesText: x.routes, claimed: db.payments.filter(function (p) { return p.tripId === x.id && p.status === 'Claimed'; }).length }); }) };
+            if (body.op === 'trips') return { ok: true, problems: [], trips: db.trips.map(function (x) { return Object.assign(pub(db, x), { routesText: x.routes, claimed: db.payments.filter(function (p) { return p.tripId === x.id && p.status === 'Claimed'; }).length,
+              depositAsked: x.depositAtSignup === 'Yes' || db.calls.some(function (c) { return c.tripId === x.id && c.stage === 'Deposit'; }) }); }) };
             if (body.op === 'saveTrip') {
               var tr = body.trip;
               if (!tr.name || !tr.startDate || !(+tr.places > 0)) return { ok: false, error: 'Fill in the name, start date and places.' };
@@ -355,6 +392,7 @@
             if (body.op === 'deleteExpense') { db.expenses = db.expenses.filter(function (x) { return x.id !== body.id; }); save(db); return { ok: true }; }
             if (body.op === 'call') {
               if (body.stage === 'Interim' && (!(+body.perPerson > 0) || String(body.reason || '').trim().length < 3)) return { ok: false, error: 'An interim payment needs an amount per person and a reason.' };
+              if (body.stage === 'Deposit' && db.calls.some(function (c) { return c.tripId === t.id && c.stage === 'Deposit'; })) return { ok: false, error: 'Deposits have already been asked for.' };
               if (body.stage === 'Final' && db.calls.some(function (c) { return c.tripId === t.id && c.stage === 'Final'; })) return { ok: false, error: 'The final balance has already been called.' };
               if (!body.dueDate) return { ok: false, error: 'Choose the date it is due by.' };
               db.calls.push({ id: uid(8), tripId: t.id, stage: body.stage, reason: body.reason || '', perPerson: +body.perPerson || 0, dueDate: body.dueDate, createdAt: new Date().toISOString() });

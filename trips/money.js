@@ -10,7 +10,10 @@ var Money = (function () {
     all: { label: 'Everyone', test: function () { return true; } },
     notSupport: { label: 'Everyone except support crew', test: function (p) { return p.role !== 'Support crew'; } },
     riders: { label: 'Riders only', test: function (p) { return p.role === 'Rider'; } },
-    bikes: { label: 'Everyone bringing a bike', test: function (p) { return p.role !== 'Non-rider' && p.bikeType && p.bikeType !== 'Not bringing a bike'; } },
+    bikes: { label: 'Everyone bringing their own bike', test: function (p) {
+      return p.role !== 'Non-rider' && (p.bikeHire === 'No' || (!p.bikeHire && p.bikeType && p.bikeType !== 'Not bringing a bike'));
+    } },
+    hire: { label: 'Everyone hiring a bike', test: function (p) { return p.role !== 'Non-rider' && p.bikeHire === 'Yes'; } },
   };
   var SPLITS = ['equal', 'select', 'rooms', 'custom'];
 
@@ -131,7 +134,7 @@ var Money = (function () {
     var live = {};
     bookings.forEach(function (b) { if (b.status === 'Booked') live[b.ref] = b; });
     var active = people.filter(function (p) { return live[p.ref]; }).map(function (p) {
-      return { key: personKey(p.ref, p.n), ref: p.ref, n: Number(p.n), name: p.fullName, role: p.role, bikeType: p.bikeType };
+      return { key: personKey(p.ref, p.n), ref: p.ref, n: Number(p.n), name: p.fullName, role: p.role, bikeType: p.bikeType, bikeHire: p.bikeHire };
     });
     var person = {};
     active.forEach(function (p) { person[p.key] = { key: p.key, ref: p.ref, n: p.n, name: p.name, role: p.role, lines: [], total: 0 }; });
@@ -151,6 +154,8 @@ var Money = (function () {
 
     var interimPerPerson = calls.filter(function (c) { return c.stage === 'Interim'; }).reduce(function (a, c) { return a + pence(c.perPerson); }, 0);
     var finalCalled = calls.some(function (c) { return c.stage === 'Final'; });
+    // Trips that sign people up first only ask for deposits once the organiser calls them ("Deposit" call).
+    var depositAsked = (trip.depositAtSignup !== false && trip.depositAtSignup !== 'No') || calls.some(function (c) { return c.stage === 'Deposit'; });
 
     var rows = bookings.map(function (b) {
       var mine = active.filter(function (p) { return p.ref === b.ref; }).map(function (p) { return person[p.key]; });
@@ -161,7 +166,7 @@ var Money = (function () {
         if (x.status === 'Confirmed') confirmed += pence(x.amount); else if (x.status === 'Claimed') claimed += pence(x.amount);
       });
       var paying = mine.filter(function (p) { return p.role !== 'Support crew'; }).length;
-      var dueSoFar = b.status !== 'Booked' ? 0 : finalCalled ? cost : pence(b.depositDue) + interimPerPerson * paying;
+      var dueSoFar = b.status !== 'Booked' ? 0 : finalCalled ? cost : (depositAsked ? pence(b.depositDue) : 0) + interimPerPerson * paying;
       return {
         ref: b.ref, status: b.status, people: mine.map(function (p) { return { key: p.key, n: p.n, name: p.name, role: p.role, total: pounds(p.total), lines: p.lines }; }),
         cost: pounds(cost), confirmed: pounds(confirmed), claimed: pounds(claimed), dueSoFar: pounds(dueSoFar),
@@ -175,6 +180,7 @@ var Money = (function () {
       bookings: rows,
       expenses: expenseRows,
       finalCalled: finalCalled,
+      depositAsked: depositAsked,
       interimPerPerson: pounds(interimPerPerson),
       totals: {
         expenses: sum(expenseRows, function (e) { return e.total; }),

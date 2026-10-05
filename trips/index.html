@@ -79,7 +79,8 @@
     <div>
       <p class="eyebrow" id="rTrip"></p>
       <h1 class="page-title">Register</h1>
-      <p class="lead">Everyone going needs a place: riders, non-riders, children and support crew. Register your whole family or group here in one go.</p>
+      <p class="lead">This ride is for W/Rhinos members. Not a member yet? <a href="https://forms.gle/cbHLRxi53QGC8Hys6" target="_blank" rel="noopener">Join first</a>. Everyone going needs a place, so add your whole family or group here in one go.</p>
+      <p class="small muted" id="rPayNote" style="margin:0"></p>
     </div>
     <form id="regForm" class="stack" novalidate>
       <fieldset class="stack">
@@ -89,36 +90,36 @@
       </fieldset>
 
       <fieldset class="card stack">
-        <legend class="section-title">Your contact details</legend>
-        <div class="field"><label for="email">Email</label><input type="email" id="email" autocomplete="email"><span class="hint">Your booking link and payment details are sent here.</span></div>
-        <div class="field"><label for="address">Home address</label><input type="text" id="address" autocomplete="street-address"></div>
-        <div class="field"><label for="postcode">Postcode</label><input type="text" id="postcode" autocomplete="postal-code"></div>
+        <legend class="section-title">Contact details</legend>
+        <div class="field"><label for="email">Email</label><input type="email" id="email" autocomplete="email"><span class="hint">Your booking link is sent here, so you can check or update your booking any time.</span></div>
+        <div class="field"><label for="address">Address</label><textarea id="address" rows="3" autocomplete="street-address"></textarea></div>
       </fieldset>
 
       <fieldset class="card stack">
         <legend class="section-title">Emergency contact</legend>
         <p class="hint" style="margin:0">Someone at home, not on the trip, we can call if anyone in your booking is hurt or unwell.</p>
-        <div class="field"><label for="emergencyName">Name</label><input type="text" id="emergencyName"></div>
         <div class="grid2">
-          <div class="field"><label for="emergencyRelation">Relationship</label><input type="text" id="emergencyRelation" placeholder="e.g. sister"></div>
-          <div class="field"><label for="emergencyMobile">Mobile</label><input type="tel" id="emergencyMobile"></div>
+          <div class="field"><label for="emergencyName">Name</label><input type="text" id="emergencyName"></div>
+          <div class="field"><label for="emergencyMobile">Number</label><input type="tel" id="emergencyMobile"></div>
         </div>
       </fieldset>
 
       <fieldset class="card stack">
-        <legend class="section-title">Rooms and anything else</legend>
-        <div class="field"><label for="roomRequests">Room sharing requests</label><textarea id="roomRequests" placeholder="e.g. family room for the four of us, or happy to share a twin with Raj"></textarea>
-          <span class="hint">Requests, not promises: rooms are allocated once the hotels confirm. A single room costs more than a shared one.</span></div>
+        <legend class="section-title">Room and travel</legend>
+        <fieldset class="field"><legend class="label">I would prefer a</legend><div id="roomTypes" class="stack"></div>
+          <span class="hint">We'll do our best, but we can't promise.</span></fieldset>
+        <div class="field"><label for="roomRequests">Tell us who you'd like to share with</label><input type="text" id="roomRequests">
+          <span class="hint">We'll do our best, but we can't promise.</span></div>
         <div class="field"><label for="notes">Anything else the organiser should know (optional)</label><textarea id="notes"></textarea></div>
       </fieldset>
 
       <fieldset class="card stack">
-        <legend class="section-title">Before you register</legend>
-        <label class="check"><input type="checkbox" id="a_members"><span>Everyone in this booking is a W/Rhinos member, or will join before the trip. <a href="https://forms.gle/cbHLRxi53QGC8Hys6" target="_blank" rel="noopener">Membership form</a></span></label>
-        <label class="check"><input type="checkbox" id="a_readDetails"><span>I've read the trip details and the club's <a href="/#framework" target="_blank" rel="noopener">Framework</a>.</span></label>
-        <label class="check"><input type="checkbox" id="a_insurance"><span>Everyone will have travel insurance that covers cycling. The club does not insure us personally.</span></label>
-        <label class="check"><input type="checkbox" id="a_costs"><span>The deposit is non-refundable. The trip runs at cost: the final amount is worked out after the trip, plus £50 per rider for a charity the riders choose.</span></label>
-        <label class="check"><input type="checkbox" id="a_privacy"><span>I agree to the club holding these details as set out in its <a href="/privacy/" target="_blank" rel="noopener">privacy notice</a>.</span></label>
+        <legend class="section-title">Small print</legend>
+        <label class="check"><input type="checkbox" id="a_charter"><span>I've read the W/Rhinos <a href="/#fw-part-ii-the-ride-charter" target="_blank" rel="noopener">Ride Charter</a> and On the Road one-pager</span></label>
+        <label class="check"><input type="checkbox" id="a_deposit"><span>I understand the deposit is non-refundable</span></label>
+        <label class="check"><input type="checkbox" id="a_insurance"><span>I'll have my own travel insurance that covers cycling</span></label>
+        <label class="check"><input type="checkbox" id="a_members"><span>I'm a W/Rhinos member, or I've sent in the <a href="https://forms.gle/cbHLRxi53QGC8Hys6" target="_blank" rel="noopener">membership form</a></span></label>
+        <p class="small muted" style="margin:0">We use these details to run the trip, as set out in our <a href="/privacy/" target="_blank" rel="noopener">privacy notice</a>.</p>
       </fieldset>
 
       <div class="hp" aria-hidden="true" style="position:absolute;left:-9999px"><label for="website">Leave empty</label><input type="text" id="website" tabindex="-1" autocomplete="off"></div>

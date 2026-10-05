@@ -17,7 +17,9 @@
   function placesText(t) {
     if (t.status !== 'Open') return { big: 'Registration closed', note: t.status === 'Closed' ? 'This trip is not taking registrations.' : '' };
     if (t.placesLeft <= 0) return { big: 'Full', note: 'You can still register: you’ll join the waiting list' + (t.waiting ? ', with ' + t.waiting + (t.waiting === 1 ? ' booking' : ' bookings') + ' ahead of you' : '') + '.' };
-    return { big: t.placesLeft + '<small>of ' + t.places + ' places left</small>', note: 'Places go first come, first served. Your deposit of ' + T.money(t.depositPerPerson) + ' per person is due within ' + t.depositDays + ' days of registering.' };
+    return { big: t.placesLeft + '<small>of ' + t.places + ' places left</small>', note: 'Places go first come, first served. ' + (t.depositAtSignup === 'Yes'
+      ? 'Your deposit of ' + T.money(t.depositPerPerson) + ' per person is due within ' + t.depositDays + ' days of registering.'
+      : 'Nothing to pay when you sign up: we ask for the deposit once the trip is confirmed.') };
   }
 
   // ---------- list ----------
@@ -68,6 +70,9 @@
     }).join('');
     $('tDetails').innerHTML = T.markdown(trip.details);
     $('rTrip').textContent = trip.name;
+    $('roomTypes').innerHTML = (trip.roomTypes || ['Single room (supplement)', 'Twin share', 'Double']).map(function (r) {
+      return '<label class="check"><input type="radio" name="roomType" value="' + esc(r) + '">' + esc(r) + '</label>';
+    }).join('');
   }
 
   function loadTrip() {
@@ -97,7 +102,7 @@
     var i = $('people').children.length;
     if (i >= 8) { T.toast('One booking can have up to 8 people. Make a second booking for the rest.'); return; }
     var div = document.createElement('div');
-    div.innerHTML = T.personHtml(i, p, i === 0);
+    div.innerHTML = T.personHtml(i, p, i === 0, trip, false);
     var card = div.firstChild;
     $('people').appendChild(card);
     T.wirePerson(card, trip.startDate);
@@ -122,19 +127,22 @@
     var full = trip.placesLeft < n;
     $('regSummary').innerHTML = '<b>' + n + (n === 1 ? ' person' : ' people') + '</b> · ' +
       (full ? 'Not enough places left (' + Math.max(0, trip.placesLeft) + '), so this booking would join the waiting list.'
-        : 'Deposit ' + T.money(paying * trip.depositPerPerson) + ' (' + T.money(trip.depositPerPerson) + ' per person' + (paying < n ? ', none for support crew' : '') + '), due within ' + trip.depositDays + ' days.');
+        : trip.depositAtSignup === 'Yes'
+          ? 'Deposit ' + T.money(paying * trip.depositPerPerson) + ' (' + T.money(trip.depositPerPerson) + ' per person' + (paying < n ? ', none for support crew' : '') + '), due within ' + trip.depositDays + ' days.'
+          : 'Nothing to pay now. Once the trip is confirmed we’ll ask for the deposit (' + T.money(trip.depositPerPerson) + ' per person' + (paying < n ? ', none for support crew' : '') + ') and a few more details, like passports.');
   }
 
   function collect() {
     return {
       action: 'register', tripId: trip.id,
       lead: {
-        email: $('email').value.trim(), address: $('address').value.trim(), postcode: $('postcode').value.trim(),
-        emergencyName: $('emergencyName').value.trim(), emergencyRelation: $('emergencyRelation').value.trim(), emergencyMobile: $('emergencyMobile').value.trim(),
+        email: $('email').value.trim(), address: $('address').value.trim(),
+        emergencyName: $('emergencyName').value.trim(), emergencyMobile: $('emergencyMobile').value.trim(),
       },
       people: people(),
+      roomType: (document.querySelector('[name=roomType]:checked') || {}).value || '',
       roomRequests: $('roomRequests').value.trim(), notes: $('notes').value.trim(),
-      agree: { members: $('a_members').checked, readDetails: $('a_readDetails').checked, insurance: $('a_insurance').checked, costs: $('a_costs').checked, privacy: $('a_privacy').checked },
+      agree: { charter: $('a_charter').checked, deposit: $('a_deposit').checked, insurance: $('a_insurance').checked, members: $('a_members').checked },
       website: $('website').value,
     };
   }
@@ -142,10 +150,8 @@
     var errs = T.checkPeople(d.people, trip.startDate);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.lead.email)) errs.push('Enter a valid email address.');
     if (d.lead.address.length < 5) errs.push('Enter your home address.');
-    if (d.lead.postcode.length < 4) errs.push('Enter your postcode.');
-    if (d.lead.emergencyName.length < 2) errs.push('Enter an emergency contact who is not coming on the trip.');
-    if (d.lead.emergencyMobile.replace(/\D/g, '').length < 10) errs.push('Enter a mobile number for your emergency contact.');
-    if (Object.keys(d.agree).some(function (k) { return !d.agree[k]; })) errs.push('Please tick every box in “Before you register”.');
+    if (d.lead.emergencyMobile && d.lead.emergencyMobile.replace(/\D/g, '').length < 10) errs.push('Check the emergency contact number.');
+    if (Object.keys(d.agree).some(function (k) { return !d.agree[k]; })) errs.push('Please tick every box in the small print.');
     return errs;
   }
 
@@ -184,11 +190,12 @@
   function showResult(r) {
     var waiting = r.status === 'Waiting list';
     $('resTrip').textContent = trip.name;
-    $('resTitle').textContent = waiting ? 'You’re on the waiting list' : 'You’re booked';
+    $('resTitle').textContent = waiting ? 'You’re on the waiting list' : r.depositAtSignup === 'Yes' ? 'You’re booked' : 'You’re signed up';
     $('resLead').innerHTML = waiting
       ? 'Your booking reference is <b>' + esc(r.ref) + '</b>. We’ll email you if places come up. Please don’t pay anything yet.'
-      : 'Your places are held. Booking reference <b>' + esc(r.ref) + '</b>.' + (r.duplicate ? ' (You had already registered these people, so this is your existing booking.)' : '');
-    $('payCard').hidden = waiting || !(r.depositDue > 0);
+      : 'Your places are held. Booking reference <b>' + esc(r.ref) + '</b>.' + (r.duplicate ? ' (You had already registered these people, so this is your existing booking.)' : '') +
+        (r.depositAtSignup === 'Yes' ? '' : ' Nothing to pay yet: once the trip is confirmed we’ll ask for the deposit and a few more details, and your booking page will show you what to do.');
+    $('payCard').hidden = waiting || !(r.depositDue > 0) || r.depositAtSignup !== 'Yes';
     $('resDays').textContent = r.depositDays || trip.depositDays;
     $('resAmount').textContent = T.money(r.depositDue);
     $('resAccName').textContent = r.bank.accountName;

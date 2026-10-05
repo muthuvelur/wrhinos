@@ -7,10 +7,11 @@ function test(name, fn) {
   try { fn(); passed++; } catch (e) { console.error('FAIL: ' + name + '\n  ' + e.message); process.exitCode = 1; }
 }
 
-const trip = { id: 'rhine-2027', name: 'Rhine', datesText: 'May 2027', startDate: '2027-05-28', places: 50, depositPerPerson: 100, depositDays: 7 };
-const adult = (o) => Object.assign({ fullName: 'Asha Rider', dob: '1980-04-02', role: 'Rider', mobile: '07700 900123', bikeType: 'Road' }, o);
+const trip = { id: 'rhine-2027', name: 'Rhine', datesText: 'May 2027', startDate: '2027-05-28', places: 50, depositPerPerson: 100, depositDays: 7,
+  bikeOptions: ['Hire a hybrid bike | hire', 'Bring my own bike | own'].join('\n') };
+const adult = (o) => Object.assign({ fullName: 'Asha Rider', dob: '1980-04-02', role: 'Rider', mobile: '07700 900123', bikeChoice: 'Bring my own bike' }, o);
 const lead = { email: 'Asha@Example.com ', address: '1 High Street, Birmingham', postcode: 'b15 3sd', emergencyName: 'Ravi Home', emergencyRelation: 'Brother', emergencyMobile: '07700 900999' };
-const agree = { members: true, readDetails: true, insurance: true, costs: true, privacy: true };
+const agree = { charter: true, deposit: true, insurance: true, members: true };
 
 test('age on trip start', () => {
   assert.strictEqual(C.ageOn_('2009-05-28', '2027-05-28'), 18);
@@ -41,11 +42,11 @@ test('valid single registration', () => {
 });
 
 test('family: child needs a responsible adult, deposit per person, support crew pays no deposit', () => {
-  const kid = { fullName: 'Kavi Rider', dob: '2014-01-01', role: 'Rider', bikeType: 'Hybrid' };
+  const kid = { fullName: 'Kavi Rider', dob: '2014-01-01', role: 'Rider', bikeChoice: 'Hire a hybrid bike' };
   let r = C.validateRegistration_({ lead, people: [adult(), kid], agree }, trip);
   assert.ok(r.errors.some((e) => /under 18/.test(e)));
   kid.responsibleAdult = 'Asha Rider';
-  const crew = { fullName: 'Sam Support', dob: '1975-01-01', role: 'Support crew', bikeType: 'Not bringing a bike' };
+  const crew = { fullName: 'Sam Support', dob: '1975-01-01', role: 'Support crew' };
   r = C.validateRegistration_({ lead, people: [adult(), kid, crew], agree }, trip);
   assert.deepStrictEqual(r.errors, []);
   assert.strictEqual(r.people[1].under18, true);
@@ -54,7 +55,7 @@ test('family: child needs a responsible adult, deposit per person, support crew 
 });
 
 test('responsible adult in another booking is allowed but flagged', () => {
-  const kid = { fullName: 'Kavi Rider', dob: '2014-01-01', role: 'Rider', bikeType: 'Hybrid', responsibleAdult: 'Uncle Raj' };
+  const kid = { fullName: 'Kavi Rider', dob: '2014-01-01', role: 'Rider', bikeChoice: 'Hire a hybrid bike', responsibleAdult: 'Uncle Raj' };
   const r = C.validateRegistration_({ lead, people: [adult(), kid], agree }, trip);
   assert.deepStrictEqual(r.errors, []);
   assert.strictEqual(r.people[1].responsibleAdultElsewhere, true);
@@ -92,9 +93,9 @@ test('passport expiring before the trip is rejected; empty passport is fine', ()
 });
 
 test('non-riders need no bike; riders do', () => {
-  let r = C.validateRegistration_({ lead, people: [adult({ bikeType: '' })], agree }, trip);
-  assert.ok(r.errors.some((e) => /bike type/.test(e)));
-  r = C.validateRegistration_({ lead, people: [adult({ role: 'Non-rider', bikeType: '' })], agree }, trip);
+  let r = C.validateRegistration_({ lead, people: [adult({ bikeChoice: '' })], agree }, trip);
+  assert.ok(r.errors.some((e) => /bike option/.test(e)));
+  r = C.validateRegistration_({ lead, people: [adult({ role: 'Non-rider', bikeChoice: '' })], agree }, trip);
   assert.deepStrictEqual(r.errors, []);
 });
 
@@ -196,6 +197,38 @@ test('payment call emails: interim states the reason, final states the totals', 
   assert.ok(/£562\.53 is due/.test(rem.body));
   const links = C.buildLinksEmail_([{ ref: 'RAKIM', trip: 'Rhine', link: 'https://a' }, { ref: 'BOLAN', trip: 'Lakes', link: 'https://b' }], cfg);
   assert.ok(/links/.test(links.subject) && /https:\/\/a/.test(links.body) && /https:\/\/b/.test(links.body));
+});
+
+test('sign-up matches the trip form: emergency contact optional, hire sizing kept only for hire bikes', () => {
+  const lead2 = { email: 'a@b.co', address: '1 High Street\nBirmingham B1 1AA' };
+  let r = C.validateRegistration_({ lead: lead2, people: [adult({ bikeChoice: 'Hire a hybrid bike', heightCm: '178', insideLegCm: '81', pedals: 'Shimano SPD' })], agree, roomType: 'Twin share' }, trip);
+  assert.deepStrictEqual(r.errors, []);
+  assert.strictEqual(r.booking.address, '1 High Street, Birmingham B1 1AA');
+  assert.strictEqual(r.booking.roomType, 'Twin share');
+  assert.strictEqual(r.people[0].bikeHire, 'Yes');
+  assert.strictEqual(r.people[0].heightCm, '178');
+  assert.strictEqual(r.people[0].pedals, 'Shimano SPD');
+  r = C.validateRegistration_({ lead: lead2, people: [adult({ heightCm: '178', pedals: 'Shimano SPD' })], agree }, trip);
+  assert.strictEqual(r.people[0].bikeHire, 'No');
+  assert.strictEqual(r.people[0].heightCm, '');
+  r = C.validateRegistration_({ lead: lead2, people: [adult({ bikeChoice: 'A unicorn' })], agree }, trip);
+  assert.ok(r.errors.some((e) => /bike option/.test(e)));
+});
+
+test('bike options per trip', () => {
+  assert.deepStrictEqual(C.parseBikeOptions_('Hire a road e-bike (about €180–200) | hire\nBring my own | own\n\n'),
+    [{ label: 'Hire a road e-bike (about €180–200)', hire: true }, { label: 'Bring my own', hire: false }]);
+  assert.deepStrictEqual(C.parseBikeOptions_(''), [{ label: 'Bring my own bike', hire: false }]);
+});
+
+test('sign-up-first email asks for nothing yet; details still missing are listed', () => {
+  const cfg = { clubName: 'W', bankAccountName: 'W', bankSortCode: '12-34-56', bankAccountNumber: '12345678' };
+  const mail = C.buildRegistrationEmail_({ ref: 'RAKIM', status: 'Booked', depositDue: 100 }, [{ fullName: 'Asha Rider', role: 'Rider' }], Object.assign({}, trip, { depositAtSignup: 'No' }), cfg, 'https://x');
+  assert.ok(/NOTHING TO PAY YET/.test(mail.body) && !/PAYMENT REFERENCE/.test(mail.body));
+  const deposit = C.buildCallEmail_({ ref: 'RAKIM', leadName: 'Asha Rider' }, { owesNow: 100 }, { stage: 'Deposit', dueDate: '2027-02-01' }, trip, cfg, 'https://x');
+  assert.ok(/is confirmed/.test(deposit.body) && /PLEASE PAY £100 BY 2027-02-01/.test(deposit.body));
+  const missing = C.missingDetails_([{ fullName: 'Asha Rider', role: 'Rider', bikeHire: 'No' }, { fullName: 'Kavi Rider', role: 'Rider', bikeHire: 'Yes', passportNumber: 'X1' }], { emergencyName: '', emergencyMobile: '' });
+  assert.deepStrictEqual(missing, ['Asha Rider: passport details', 'Asha Rider: bike make and colour', 'Kavi Rider: height and inside leg for the hire bike', 'Emergency contact']);
 });
 
 test('trip charity fee defaults to £50 and is checked', () => {

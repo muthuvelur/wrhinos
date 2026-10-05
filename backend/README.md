@@ -38,6 +38,13 @@ After changing `Code.gs` or `trips/money.js` later (paste the new version into C
 
 ## Organiser routine
 
+- **Sign-up first, deposits later** (the default, set per trip under Trip details > "When is the deposit asked for?").
+  Sign-up asks only the trip form questions: name, date of birth, address, phone, emergency contact, bike choice
+  (hire options are set per trip under "Bike options"; hire riders give height, inside leg, frame size, saddle height and
+  pedals), room preference, dietary needs and the small print. Places are held, nothing is paid.
+- **When the trip is confirmed:** Money tab > **Ask for deposits and details**. Everyone's booking page then shows a
+  "Next steps" list (pay the deposit, add passports, add own-bike make and colour) and you get a WhatsApp group message
+  to post (or email everyone instead).
 - **Payments to check:** riders tap "I've paid". Check the club bank statement, then tap **In the bank ✓** (the rider gets
   a "payment received" email) or **Not found**.
 - **Record a payment** for cash or anything paid without the rider tapping "I've paid".

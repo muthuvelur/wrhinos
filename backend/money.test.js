@@ -146,6 +146,27 @@ test('balances: interim call per paying person, then the final balance', () => {
   assert.strictEqual(r.bookings.find((b) => b.ref === 'SUDEV').owesNow, 80);
 });
 
+test('sign-up-first trips: no deposit owed until the organiser asks for it', () => {
+  const t = { charityFee: 50, depositAtSignup: 'No' };
+  let r = M.balances(t, bookings, people, [], [], []);
+  assert.strictEqual(r.depositAsked, false);
+  assert.strictEqual(r.bookings.find((b) => b.ref === 'RAKIM').owesNow, 0);
+  r = M.balances(t, bookings, people, [], [], [{ stage: 'Deposit' }]);
+  assert.strictEqual(r.depositAsked, true);
+  assert.strictEqual(r.bookings.find((b) => b.ref === 'RAKIM').owesNow, 300);
+});
+
+test('hire bikes vs own bikes groups', () => {
+  const ps = [
+    { key: 'A-1', role: 'Rider', bikeHire: 'Yes' },
+    { key: 'A-2', role: 'Rider', bikeHire: 'No' },
+    { key: 'A-3', role: 'Non-rider', bikeHire: '' },
+    { key: 'B-1', role: 'Rider', bikeType: 'Road' },
+  ];
+  assert.deepStrictEqual(Object.keys(M.shares({ split: 'equal', amount: 10, detail: { group: 'hire' } }, ps).shares), ['A-1']);
+  assert.deepStrictEqual(Object.keys(M.shares({ split: 'equal', amount: 10, detail: { group: 'bikes' } }, ps).shares).sort(), ['A-2', 'B-1']);
+});
+
 test('balances: every penny of every expense lands on someone', () => {
   const many = Array.from({ length: 58 }, (_, i) => ({ ref: 'R' + i, n: 1, fullName: 'P' + i, role: 'Rider', bikeType: 'Road' }));
   const bk = many.map((p) => ({ ref: p.ref, status: 'Booked', depositDue: 100 }));

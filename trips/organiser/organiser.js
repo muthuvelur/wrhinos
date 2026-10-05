@@ -116,6 +116,11 @@
       '<div class="field"><label>Deposit per person (£)</label><input type="number" min="0" step="0.01" data-f="depositPerPerson" value="' + v('depositPerPerson') + '"><span class="hint">Support crew pay no deposit.</span></div></div>' +
       '<div class="grid2"><div class="field"><label>Days to pay the deposit</label><input type="number" min="1" data-f="depositDays" value="' + v('depositDays') + '"></div>' +
       '<div class="field"><label>Charity fee per rider (£)</label><input type="number" min="0" step="0.01" data-f="charityFee" value="' + esc(t.charityFee === undefined ? 50 : t.charityFee) + '"><span class="hint">Added to every rider’s bill and given to a charity the riders choose.</span></div></div>' +
+      '<div class="grid2"><div class="field"><label>When is the deposit asked for?</label><select data-f="depositAtSignup">' +
+        '<option value="No"' + (t.depositAtSignup !== 'Yes' ? ' selected' : '') + '>Later: sign up first, deposit once the trip is confirmed</option>' +
+        '<option value="Yes"' + (t.depositAtSignup === 'Yes' ? ' selected' : '') + '>Straight away, when people sign up</option></select></div></div>' +
+      '<div class="field"><label>Bike options</label><textarea data-f="bikeOptions" rows="5">' + esc(t.bikeOptionsText || '') + '</textarea>' +
+      '<span class="hint">One per line: what people choose, a | sign, then <b>hire</b> or <b>own</b>. For example: Hire a hybrid e-bike | hire. Hire riders are asked for height, inside leg, frame size, saddle height and pedals.</span></div>' +
       '<div class="field"><label>One-line summary</label><input type="text" data-f="summary" value="' + v('summary') + '"></div>' +
       '</div>' +
       '<div class="card stack"><div class="field"><label>Route links</label><textarea data-f="routes" rows="4" placeholder="Day 1: Frankfurt – St Goar | https://ridewithgps.com/routes/…">' + esc(t.routesText || '') + '</textarea>' +
@@ -138,7 +143,7 @@
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var trip = { id: t ? t.id : '' };
-      ['name', 'status', 'organiser', 'datesText', 'startDate', 'places', 'depositPerPerson', 'depositDays', 'charityFee', 'summary', 'routes', 'details'].forEach(function (k) { trip[k] = get(k); });
+      ['name', 'status', 'organiser', 'datesText', 'startDate', 'places', 'depositPerPerson', 'depositDays', 'charityFee', 'depositAtSignup', 'bikeOptions', 'summary', 'routes', 'details'].forEach(function (k) { trip[k] = get(k); });
       var btn = form.querySelector('[type=submit]');
       btn.disabled = true;
       admin('saveTrip', { trip: trip }).then(function (r) {
@@ -166,7 +171,7 @@
     }).catch(function (e) { if (e.message) T.toast(e.message); });
   }
 
-  function owes(b) { return Math.max(0, Math.round((b.depositDue - b.totals.confirmed) * 100) / 100); }
+  function owes(b) { return current.depositAsked === false ? 0 : Math.max(0, Math.round((b.depositDue - b.totals.confirmed) * 100) / 100); }
   var FILTERS = [
     ['all', 'All', function (b) { return b.status !== 'Cancelled'; }],
     ['check', 'Payments to check', function (b) { return b.payments.some(function (p) { return p.status === 'Claimed'; }); }],
@@ -186,7 +191,7 @@
       [taken + ' / ' + current.places, 'Places taken'],
       [Math.max(0, current.places - taken), 'Places left'],
       [waitingPeople, 'People waiting'],
-      [T.money(got) + ' / ' + T.money(due), 'Deposits checked'],
+      current.depositAsked === false ? ['Not yet', 'Deposits asked for'] : [T.money(got) + ' / ' + T.money(due), 'Deposits checked'],
     ].map(function (s) { return '<div><b>' + esc(s[0]) + '</b><span>' + esc(s[1]) + '</span></div>'; }).join('');
     $('filters').innerHTML = FILTERS.map(function (f) {
       var n = bookings.filter(f[2]).length;
@@ -209,7 +214,7 @@
   function bookingHtml(b) {
     var claimed = b.payments.filter(function (p) { return p.status === 'Claimed'; });
     var left = owes(b);
-    var chip = b.status === 'Booked' ? (left > 0 ? '<span class="chip ' + (claimed.length ? 'warn' : 'bad') + '">' + (claimed.length ? 'Check payment' : 'Owes ' + T.money(left)) + '</span>' : '<span class="chip ok">Deposit paid</span>')
+    var chip = b.status === 'Booked' && current.depositAsked === false ? '<span class="chip ok">Place held</span>' : b.status === 'Booked' ? (left > 0 ? '<span class="chip ' + (claimed.length ? 'warn' : 'bad') + '">' + (claimed.length ? 'Check payment' : 'Owes ' + T.money(left)) + '</span>' : '<span class="chip ok">Deposit paid</span>')
       : '<span class="chip ' + (b.status === 'Waiting list' ? 'warn' : '') + '">' + esc(b.status) + '</span>';
     var first = String(b.leadName).split(' ')[0];
     var waMsg = 'Hi ' + first + ', a reminder about your W/Rhinos booking for ' + current.name + ': your deposit of ' + T.money(left - b.totals.claimed) +
@@ -225,17 +230,19 @@
           '<span class="row"><button type="button" class="btn btn-ok btn-small" data-act="confirm" data-id="' + esc(p.id) + '">In the bank ✓</button>' +
           '<button type="button" class="btn btn-line btn-small" data-act="reject" data-id="' + esc(p.id) + '">Not found</button></span></div>';
       }).join('') + '</div>' : '') +
-      '<div class="table-wrap"><table class="plain"><thead><tr><th>Name</th><th>Going as</th><th>Age</th><th>Bike</th><th>Diet</th><th>Passport</th></tr></thead><tbody>' +
+      '<div class="table-wrap"><table class="plain"><thead><tr><th>Name</th><th>Going as</th><th>Age</th><th>Bike</th><th>Diet</th><th>Phone</th><th>Passport</th></tr></thead><tbody>' +
       (b.persons || []).map(function (p) {
         var age = T.ageOn(p.dob, current.startDate);
         return '<tr><td>' + esc(p.fullName) + (p.under18 === 'Yes' ? '<br><span class="small muted">with ' + esc(p.responsibleAdult) + '</span>' : '') + '</td><td>' + esc(p.role) + '</td><td>' + (age === null ? '' : age) + '</td>' +
-          '<td>' + esc([p.bikeType, p.bikeMake, p.bikeColour].filter(Boolean).join(', ')) + '</td><td>' + esc(p.dietary) + '</td>' +
+          '<td>' + esc([p.bikeChoice || p.bikeType, p.bikeMake, p.bikeColour].filter(Boolean).join(', ')) +
+          (p.bikeHire === 'Yes' ? '<br><span class="small muted">' + esc([p.heightCm && 'height ' + p.heightCm, p.insideLegCm && 'leg ' + p.insideLegCm, p.frameSize && 'frame ' + p.frameSize, p.saddleHeightCm && 'saddle ' + p.saddleHeightCm, p.pedals].filter(Boolean).join(', ')) + '</span>' : '') +
+          '</td><td>' + esc(p.dietary) + '</td><td>' + esc(p.mobile) + '</td>' +
           '<td>' + (p.passportNumber ? esc(p.passportNumber) + '<br><span class="small muted">' + esc(p.passportCountry) + ' ' + esc(T.niceDate(p.passportExpiry)) + '</span>' : '<span class="chip warn">Missing</span>') + '</td></tr>' +
           (p.safetyInfo ? '<tr><td colspan="6" class="small"><b>Safety:</b> ' + esc(p.safetyInfo) + '</td></tr>' : '');
       }).join('') + '</tbody></table></div>' +
       '<dl class="kv"><dt>Email</dt><dd>' + esc(b.email) + '</dd><dt>Mobile</dt><dd>' + esc(b.mobile) + '</dd><dt>Address</dt><dd>' + esc(b.address) + ', ' + esc(b.postcode) + '</dd>' +
       '<dt>Emergency</dt><dd>' + esc(b.emergencyName) + ' (' + esc(b.emergencyRelation) + ') ' + esc(b.emergencyMobile) + '</dd>' +
-      '<dt>Rooms</dt><dd>' + esc(b.roomRequests || '—') + '</dd><dt>Notes</dt><dd>' + esc(b.notes || '—') + '</dd></dl>' +
+      '<dt>Room</dt><dd>' + esc([b.roomType, b.roomRequests ? 'share with ' + b.roomRequests : ''].filter(Boolean).join(', ') || '—') + '</dd><dt>Notes</dt><dd>' + esc(b.notes || '—') + '</dd></dl>' +
       (b.payments.length ? '<div class="table-wrap"><table class="plain"><thead><tr><th>Paid on</th><th>For</th><th>Amount</th><th>Status</th></tr></thead><tbody>' +
         b.payments.map(function (p) { return '<tr><td>' + esc(T.niceDate(p.paidOn)) + '</td><td>' + esc(p.stage) + '</td><td>' + T.money(p.amount) + '</td><td>' + esc(p.status) + (p.source === 'Organiser' ? ' (added by organiser)' : '') + '</td></tr>'; }).join('') +
         '</tbody></table></div>' : '') +
@@ -582,8 +589,9 @@
       [T.money(r.totals.owesNow), 'Owed now'],
     ]);
     $('callList').innerHTML = mon.calls.length ? '<table class="plain"><thead><tr><th>Called</th><th>What</th><th>Due by</th><th>Emails</th></tr></thead><tbody>' + mon.calls.map(function (c) {
-      return '<tr><td>' + esc(T.niceDate(c.createdAt)) + '</td><td>' + (c.stage === 'Final' ? '<b>Final balance</b>' : '<b>Interim</b> ' + T.money(c.perPerson) + ' per person<br><span class="muted">' + esc(c.reason) + '</span>') + '</td><td>' + esc(T.niceDate(c.dueDate)) + '</td><td>' + esc(c.emailed || '–') + '</td></tr>';
-    }).join('') + '</tbody></table>' : '<p class="muted" style="margin:0">Only the deposit has been asked for so far.</p>';
+      return '<tr><td>' + esc(T.niceDate(c.createdAt)) + '</td><td>' + (c.stage === 'Deposit' ? '<b>Deposits and details</b>' : c.stage === 'Final' ? '<b>Final balance</b>' : '<b>Interim</b> ' + T.money(c.perPerson) + ' per person<br><span class="muted">' + esc(c.reason) + '</span>') + '</td><td>' + esc(T.niceDate(c.dueDate)) + '</td><td>' + esc(c.emailed || '–') + '</td></tr>';
+    }).join('') + '</tbody></table>' : '<p class="muted" style="margin:0">' + (r.depositAsked ? 'Only the deposit has been asked for so far.' : 'Nothing asked for yet: people have signed up and their places are held. When the trip is confirmed, tap “Ask for deposits and details”.') + '</p>';
+    $('callDeposit').hidden = r.depositAsked || r.finalCalled;
     $('callFinal').hidden = r.finalCalled;
     $('callInterim').hidden = r.finalCalled;
     $('monNote').textContent = r.finalCalled
@@ -631,7 +639,11 @@
   function callForm(stage) {
     var f = $('callForm');
     var nextMonth = new Date(Date.now() + 28 * 86400000).toISOString().slice(0, 10);
-    f.innerHTML = (stage === 'Interim'
+    var inAWeek = new Date(Date.now() + (current.depositDays || 7) * 86400000).toISOString().slice(0, 10);
+    f.innerHTML = (stage === 'Deposit'
+      ? '<p class="small" style="margin:0">Do this once the trip is confirmed. Everyone booked is asked for the deposit (' + T.money(current.depositPerPerson) + ' per person, none for support crew), and their booking page asks for the rest of their details: passports, and bike details for anyone bringing their own.</p>' +
+        '<div class="field"><label for="cfDue">Deposit due by</label><input type="date" id="cfDue" value="' + inAWeek + '"></div>'
+      : stage === 'Interim'
       ? '<p class="small" style="margin:0">Ask everyone (except support crew) for a set amount per person, for example when a hotel needs paying before the trip. The Framework asks us to say why.</p>' +
         '<div class="grid2"><div class="field"><label for="cfPer">Amount per person (£)</label><input type="text" inputmode="decimal" id="cfPer"></div>' +
         '<div class="field"><label for="cfDue">Due by</label><input type="date" id="cfDue" value="' + nextMonth + '"></div></div>' +
@@ -642,7 +654,7 @@
       '<label class="check"><input type="radio" name="cfHow" value="group" checked>Write a message I can post in the WhatsApp group</label>' +
       '<label class="check"><input type="radio" name="cfHow" value="email">Email everyone who owes their own amount and the bank details</label></fieldset>' +
       '<div class="error" id="cfError" hidden></div>' +
-      '<div class="row"><button type="submit" class="btn btn-primary">' + (stage === 'Interim' ? 'Call interim payment' : 'Call final balance') + '</button><button type="button" class="btn btn-line" id="cfCancel">Cancel</button></div>';
+      '<div class="row"><button type="submit" class="btn btn-primary">' + (stage === 'Deposit' ? 'Ask for deposits and details' : stage === 'Interim' ? 'Call interim payment' : 'Call final balance') + '</button><button type="button" class="btn btn-line" id="cfCancel">Cancel</button></div>';
     f.hidden = false;
     f.dataset.stage = stage;
     $('cfCancel').addEventListener('click', function () { f.hidden = true; });
@@ -653,7 +665,12 @@
     var bank = mon.bank || {};
     var due = call && call.dueDate ? T.niceDate(call.dueDate) : '';
     var lines = ['W/Rhinos – ' + current.name, ''];
-    if (call && call.stage === 'Interim') {
+    if (call && call.stage === 'Deposit') {
+      lines.push('Great news: the trip is confirmed!', '',
+        'Next steps for everyone who has signed up:',
+        '1. Pay your deposit: ' + T.money(current.depositPerPerson) + ' per person' + (due ? ', by ' + due : '') + ' (support crew: nothing to pay). The deposit is non-refundable.',
+        '2. Open your booking page and add the rest of your details: passports, and bike make and colour if you are bringing your own bike.');
+    } else if (call && call.stage === 'Interim') {
       lines.push('Interim payment due: ' + T.money(call.perPerson) + ' per person' + (due ? ', by ' + due : '') + '.',
         'Why: ' + call.reason.replace(/\.$/, '') + '.', '(Support crew: nothing to pay.)');
     } else if (call && call.stage === 'Final') {
@@ -686,6 +703,7 @@
     showGroupMessage(groupMessage(last ? { stage: 'Reminder', dueDate: last.dueDate } : null));
   });
 
+  $('callDeposit').addEventListener('click', function () { callForm('Deposit'); });
   $('callInterim').addEventListener('click', function () { callForm('Interim'); });
   $('callFinal').addEventListener('click', function () { callForm('Final'); });
   $('callForm').addEventListener('submit', function (e) {
@@ -699,7 +717,8 @@
     admin('call', body).then(function (r) {
       if (!r.ok) { T.errorBox($('cfError'), [r.error]); return; }
       f.hidden = true;
-      T.toast((stage === 'Final' ? 'Final balance called' : 'Interim payment called') +
+      if (stage === 'Deposit') current.depositAsked = true;
+      T.toast((stage === 'Deposit' ? 'Deposits asked for' : stage === 'Final' ? 'Final balance called' : 'Interim payment called') +
         (how === 'email' ? (T.DEMO ? ' (preview: no emails sent)' : ', ' + r.emailed + ' emails sent') : ''));
       return loadMoney().then(function () { if (how === 'group') showGroupMessage(groupMessage(body)); });
     }).catch(function () { /* */ }).then(function () { btn.disabled = false; });
