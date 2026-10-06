@@ -1100,16 +1100,24 @@ function setup() {
     const list = name === 'Trips' ? TRIP_STATUSES : name === 'Bookings' ? BOOKING_STATUSES : ['Claimed', 'Confirmed', 'Rejected'];
     sh.getRange(2, col, sh.getMaxRows() - 1, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(list, true).build());
   });
-  const warm = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'keepWarm'; });
-  if (!warm) ScriptApp.newTrigger('keepWarm').timeBased().everyMinutes(10).create();
+  // Replace any older keep-warm timer with one every 5 minutes.
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'keepWarm') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('keepWarm').timeBased().everyMinutes(5).create();
   const cfg = readSettings_();
   notify_('Setup done', cfg.problems.length
     ? 'Tabs are ready. Now fill in the Settings tab:\n- ' + cfg.problems.join('\n- ')
     : 'Tabs are ready and settings look good. Next: Deploy > New deployment > Web app (see README).');
 }
 
-// Google puts idle scripts to sleep, which makes the next visitor wait. A tiny task every 10 minutes avoids that.
-function keepWarm() { try { readSettings_(); } catch (e) { /* only here to keep the script warm */ } }
+// Google puts idle web apps to sleep, which makes the next visitor wait 20+ seconds. The timer runs the editor's
+// copy of the script, not the deployed one the website uses, so it calls the website's own address to wake that.
+function keepWarm() {
+  try {
+    const url = ScriptApp.getService().getUrl();
+    if (url) UrlFetchApp.fetch(url + '?action=ping', { muteHttpExceptions: true, followRedirects: true });
+    else readSettings_();
+  } catch (e) { /* only here to keep the web app warm */ }
+}
 
 if (typeof module !== 'undefined') {
   module.exports = {
