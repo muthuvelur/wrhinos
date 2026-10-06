@@ -258,9 +258,43 @@
     };
     return go();
   }
+  // Trip pages show something straight away and update quietly, so nobody waits on Google:
+  // first this phone's last copy, else the snapshot published on wrhinos.com, then the live answer replaces it.
+  var CACHE = 'wrhinos-trips-cache:';
+  function cacheGet(k) { try { return JSON.parse(localStorage.getItem(CACHE + k) || 'null'); } catch (e) { return null; } }
+  function cacheSet(k, v) { try { localStorage.setItem(CACHE + k, JSON.stringify(v)); } catch (e) { /* no storage: just slower */ } }
+  var snap = null;
+  function snapshot() {
+    if (!snap) snap = fetch('/trips/content/trips.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+    return snap;
+  }
+  function quick(key, live, fromSnapshot, onFresh) {
+    var answered = false;
+    var livePromise = live().then(function (r) {
+      if (r && r.ok) cacheSet(key, r);
+      if (answered && onFresh && r && r.ok) onFresh(r);
+      return r;
+    });
+    livePromise.catch(function () { /* the quick copy is already showing */ });
+    var cached = cacheGet(key);
+    var first = cached ? Promise.resolve(cached) : snapshot().then(function (s) { return s ? fromSnapshot(s) : null; });
+    return first.then(function (x) {
+      if (x && x.ok) { answered = true; return Object.assign({}, x, { stale: true }); }
+      return livePromise;
+    });
+  }
   var api = DEMO ? null : {
-    trips: function () { return getJson({ action: 'trips' }); },
-    trip: function (id) { return getJson({ action: 'trip', id: id }); },
+    trips: function (onFresh) {
+      return quick('trips', function () { return getJson({ action: 'trips' }); }, function (s) {
+        return { ok: true, trips: (s.trips || []).map(function (t) { var x = Object.assign({}, t); delete x.details; return x; }) };
+      }, onFresh);
+    },
+    trip: function (id, onFresh) {
+      return quick('trip:' + id, function () { return getJson({ action: 'trip', id: id }); }, function (s) {
+        var t = (s.trips || []).filter(function (x) { return x.id === id; })[0];
+        return t ? { ok: true, trip: t, ready: true } : null;
+      }, onFresh);
+    },
     post: postJson,
   };
 

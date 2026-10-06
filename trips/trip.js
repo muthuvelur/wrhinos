@@ -32,8 +32,14 @@
   }
 
   function loadList() {
-    T.api.trips().then(function (r) {
+    // Shows the quick copy at once; the live list replaces it when Google answers.
+    T.api.trips(function (fresh) { renderList(fresh); }).then(function (r) {
       if (!r || !r.ok) throw new Error(r && r.error);
+      renderList(r);
+      show('listView');
+    }).catch(failed);
+  }
+  function renderList(r) {
       renderMine();
       $('tripList').innerHTML = r.trips.length ? r.trips.map(function (t) {
         var p = placesText(t);
@@ -44,8 +50,6 @@
           (t.status !== 'Open' ? 'Closed' : t.placesLeft > 0 ? t.placesLeft + ' of ' + t.places + ' places left' : 'Full: waiting list') + '</span>' +
           '<span class="small" style="color:var(--accent);font-weight:700">View trip →</span></div></a>';
       }).join('') : '<div class="card muted">No trips are open for registration yet. Check back soon.</div>';
-      show('listView');
-    }).catch(failed);
   }
 
   // ---------- one trip ----------
@@ -70,14 +74,22 @@
     }).join('');
     $('tDetails').innerHTML = T.markdown(trip.details);
     $('rTrip').textContent = trip.name;
-    $('roomTypes').innerHTML = (trip.roomTypes || ['Single room (supplement)', 'Twin share', 'Double']).map(function (r) {
-      return '<label class="check"><input type="radio" name="roomType" value="' + esc(r) + '">' + esc(r) + '</label>';
-    }).join('');
+    if (!$('roomTypes').children.length) {
+      $('roomTypes').innerHTML = (trip.roomTypes || ['Single room (supplement)', 'Twin share', 'Double']).map(function (r) {
+        return '<label class="check"><input type="radio" name="roomType" value="' + esc(r) + '">' + esc(r) + '</label>';
+      }).join('');
+    }
   }
 
   function loadTrip() {
     $('loadingText').textContent = 'Loading the trip…';
-    T.api.trip(tripId).then(function (r) {
+    // The quick copy shows at once; when the live trip arrives, places and any organiser changes update in place.
+    T.api.trip(tripId, function (fresh) {
+      trip = fresh.trip;
+      renderTrip();
+      updateSummary();
+      if (trip.status !== 'Open' && !$('registerView').hidden) route();
+    }).then(function (r) {
       if (!r || !r.ok) throw new Error((r && r.error) || '');
       trip = r.trip;
       renderTrip();
