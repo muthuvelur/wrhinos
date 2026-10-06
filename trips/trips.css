@@ -194,3 +194,4 @@ table.plain td{padding:8px 10px 8px 0; border-bottom:1px solid var(--rule); vert
   .md table.wide td[data-label]:not(:first-child)::before{content:attr(data-label) ": "; color:var(--muted); font-size:12px; letter-spacing:.06em; text-transform:uppercase; font-weight:700}
 }
 .grid2.keep2{grid-template-columns:1fr 1fr}
+input.invalid,select.invalid,textarea.invalid{border-color:var(--mark)!important;box-shadow:0 0 0 3px var(--bad-tint)}
