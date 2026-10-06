@@ -38,9 +38,10 @@
       if (!r.ok) { T.errorBox($('loginError'), [r.error]); return; }
       try { sessionStorage.setItem('wrhinos-org', pass); } catch (x) { /* */ }
       $('pass').value = '';
+      $('loginView').hidden = true;
       showProblems(r.problems, r.bankProblems);
       loadTrips();
-    }).catch(function () { /* handled */ }).then(function () { $('loginBtn').disabled = false; });
+    }).catch(function (e) { if (e && e.message) T.errorBox($('loginError'), [e.message]); }).then(function () { $('loginBtn').disabled = false; });
   });
   $('logout').addEventListener('click', function () { lock(''); });
   function showProblems(list, bank) {
@@ -55,6 +56,7 @@
     busy();
     return admin('trips').then(function (r) {
       if (!r.ok) throw new Error(r.error);
+      if (!Array.isArray(r.trips)) throw new Error('The trips didn’t load. Tap Lock, then sign in again.');
       trips = r.trips;
       if (r.problems) showProblems(r.problems, r.bankProblems);
       $('tripCards').innerHTML = trips.length ? trips.map(function (t) {
@@ -67,7 +69,12 @@
         a.addEventListener('click', function (e) { e.preventDefault(); openTrip(a.getAttribute('data-id')); });
       });
       if (thenId) openTrip(thenId); else views('tripsView');
-    }).catch(function (e) { if (e.message) { T.toast(e.message); views('tripsView'); } });
+    }).catch(function (e) {
+      if (!e.message) return;
+      $('tripCards').innerHTML = '<div class="error">' + esc(e.message) + ' <button type="button" class="linkbtn" id="retryTrips">Try again</button></div>';
+      $('retryTrips').addEventListener('click', function () { loadTrips(); });
+      views('tripsView');
+    });
   }
   $('backTrips').addEventListener('click', function (e) { e.preventDefault(); loadTrips(); });
   $('backNew').addEventListener('click', function (e) { e.preventDefault(); views('tripsView'); });

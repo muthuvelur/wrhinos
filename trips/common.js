@@ -229,18 +229,34 @@
 
   // ---------- backend calls ----------
   function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  // Google sometimes answers with an error page, or redirects a request so it arrives empty. Both are safe to retry.
   function getJson(params) {
     var url = BACKEND + '?' + Object.keys(params).map(function (k) { return k + '=' + encodeURIComponent(params[k]); }).join('&');
-    var attempt = function () { return fetch(url).then(function (r) { return r.json(); }); };
-    return attempt().catch(function () { return wait(2000).then(attempt); }).catch(function () { return wait(5000).then(attempt); });
-  }
-  // Apps Script can be slow to wake up; a repeated request is safe because the backend spots duplicates.
-  function postJson(body) {
-    var attempt = function () {
-      return fetch(BACKEND, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) })
-        .then(function (r) { return r.json(); });
+    var tries = 0;
+    var go = function () {
+      tries++;
+      return fetch(url).then(function (r) { return r.json(); })
+        .catch(function (e) { if (tries < 4) return wait(1500 * tries).then(go); throw e; });
     };
-    return attempt().catch(function () { return wait(2500).then(attempt); });
+    return go();
+  }
+  // A reply carrying "service" means the request reached the script without its contents (Google redirected it),
+  // so nothing was done and asking again is safe. Real repeats are also safe: the backend spots duplicate bookings.
+  function postJson(body) {
+    var tries = 0;
+    var go = function () {
+      tries++;
+      return fetch(BACKEND, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (j && j.service && !('error' in j)) {
+            if (tries < 5) return wait(800 * tries).then(go);
+            throw new Error('The booking system is busy. Please try again in a minute.');
+          }
+          return j;
+        }, function (e) { if (tries < 4) return wait(1500 * tries).then(go); throw e; });
+    };
+    return go();
   }
   var api = DEMO ? null : {
     trips: function () { return getJson({ action: 'trips' }); },
