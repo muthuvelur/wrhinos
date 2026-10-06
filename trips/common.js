@@ -138,7 +138,7 @@
       '<div class="card stack person" data-i="' + i + '">' +
       '<div class="person-head"><h3>' + (isLead ? 'You' : 'Person ' + (i + 1)) + '</h3>' +
       (isLead || editing ? '' : '<button type="button" class="linkbtn remove-person">Remove</button>') + '</div>' +
-      '<div class="field"><label for="' + id('fullName') + '">Name</label>' +
+      '<div class="field"><label for="' + id('fullName') + '">Full name</label>' +
       '<input type="text" id="' + id('fullName') + '" data-k="fullName" autocomplete="' + (isLead ? 'name' : 'off') + '" value="' + v('fullName') + '">' +
       '<span class="hint">As it appears in the passport.</span></div>' +
       '<div class="grid2">' +

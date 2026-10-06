@@ -150,7 +150,7 @@
     var errs = T.checkPeople(d.people, trip.startDate);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.lead.email)) errs.push('Enter a valid email address.');
     if (d.lead.address.length < 5) errs.push('Enter your home address.');
-    if (d.lead.emergencyMobile && d.lead.emergencyMobile.replace(/\D/g, '').length < 10) errs.push('Emergency contact: the number needs at least 10 digits, like 07700 900123. Or leave it empty.');
+    if (d.lead.emergencyMobile && d.lead.emergencyMobile.replace(/\D/g, '').length < 10) errs.push('Emergency contact: the phone number needs at least 10 digits, like 07700 900123. Or leave it empty.');
     if (Object.keys(d.agree).some(function (k) { return !d.agree[k]; })) errs.push('Please tick every box in the small print.');
     return errs;
   }
