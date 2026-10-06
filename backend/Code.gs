@@ -714,7 +714,8 @@ function register_(input) {
   readTable_('People').forEach(function (p) { (peopleByRef[p.ref] = peopleByRef[p.ref] || []).push(p); });
   const dup = findDuplicate_(bookings, peopleByRef, trip.id, v.booking, v.people, Date.now());
   if (dup) {
-    return { ok: true, duplicate: true, ref: dup.ref, status: dup.status, link: bookingLink_(cfg.siteUrl, dup.ref, dup.token), depositDue: Number(dup.depositDue), bank: bank_(cfg) };
+    return { ok: true, duplicate: true, ref: dup.ref, status: dup.status, link: bookingLink_(cfg.siteUrl, dup.ref, dup.token), depositDue: Number(dup.depositDue),
+      depositDays: Number(trip.depositDays), depositAtSignup: trip.depositAtSignup === 'Yes' ? 'Yes' : 'No', bank: bank_(cfg), email: dup.email };
   }
 
   const left = Number(trip.places) - placesTaken_(bookings, trip.id);
@@ -745,7 +746,8 @@ function register_(input) {
 
   const link = bookingLink_(cfg.siteUrl, b.ref, b.token);
   const sent = sendMail_(b.email, buildRegistrationEmail_(b, v.people, trip, cfg, link));
-  return { ok: true, ref: b.ref, status: b.status, link: link, depositDue: b.depositDue, depositDays: Number(trip.depositDays), bank: bank_(cfg), emailSent: sent, email: b.email };
+  return { ok: true, ref: b.ref, status: b.status, link: link, depositDue: b.depositDue, depositDays: Number(trip.depositDays),
+    depositAtSignup: trip.depositAtSignup === 'Yes' ? 'Yes' : 'No', bank: bank_(cfg), emailSent: sent, email: b.email };
 }
 
 function bank_(cfg) { return { accountName: cfg.bankAccountName, sortCode: cfg.bankSortCode, accountNumber: cfg.bankAccountNumber }; }

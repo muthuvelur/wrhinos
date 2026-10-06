@@ -220,9 +220,11 @@
     copyValues = { amount: Number(r.depositDue).toFixed(2), name: r.bank.accountName, sort: String(r.bank.sortCode).replace(/\D/g, ''), account: String(r.bank.accountNumber).replace(/\D/g, ''), ref: r.ref };
     $('resLink').textContent = r.link;
     $('openBooking').href = r.link;
-    $('resEmail').textContent = r.preview ? 'In the real system this link and the payment details are also emailed to you.'
+    var sentTo = r.email || $('email').value.trim();
+    var what = r.depositAtSignup === 'Yes' && r.status !== 'Waiting list' ? 'this link and the payment details' : 'this link';
+    $('resEmail').textContent = r.preview ? 'In the real system ' + what + ' would also be emailed to you.'
       : r.emailSent === false ? 'We couldn’t send the confirmation email, so please save this link now (a screenshot is fine).'
-        : 'We’ve also emailed this link and the payment details to ' + r.email + '. Check your spam folder if it doesn’t arrive.';
+        : 'We’ve also emailed ' + what + ' to ' + sentTo + '. Check your spam folder if it doesn’t arrive.';
     T.rememberBooking({ ref: r.ref, link: r.link, trip: trip.name, dates: trip.datesText });
     $('resultView').dataset.done = '1';
     history.replaceState(null, '', location.pathname + location.search);
