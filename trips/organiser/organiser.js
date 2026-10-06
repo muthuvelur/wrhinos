@@ -38,14 +38,16 @@
       if (!r.ok) { T.errorBox($('loginError'), [r.error]); return; }
       try { sessionStorage.setItem('wrhinos-org', pass); } catch (x) { /* */ }
       $('pass').value = '';
-      showProblems(r.problems);
+      showProblems(r.problems, r.bankProblems);
       loadTrips();
     }).catch(function () { /* handled */ }).then(function () { $('loginBtn').disabled = false; });
   });
   $('logout').addEventListener('click', function () { lock(''); });
-  function showProblems(list) {
-    $('problems').hidden = !(list && list.length);
-    $('problems').innerHTML = list && list.length ? '<b>Registrations can’t open until these are fixed in the Settings tab of the Google Sheet:</b><ul>' + list.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ul>' : '';
+  function showProblems(list, bank) {
+    var html = list && list.length ? '<b>Registrations can’t open until these are fixed in the Settings tab of the Google Sheet:</b><ul>' + list.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ul>'
+      : bank && bank.length ? '<b>Bank details not added yet.</b> Sign-ups work without them. Add them in the Settings tab of the Google Sheet before you tap “Ask for deposits and details”.' : '';
+    $('problems').hidden = !html;
+    $('problems').innerHTML = html;
   }
 
   // ---------- trips ----------
@@ -54,7 +56,7 @@
     return admin('trips').then(function (r) {
       if (!r.ok) throw new Error(r.error);
       trips = r.trips;
-      if (r.problems) showProblems(r.problems);
+      if (r.problems) showProblems(r.problems, r.bankProblems);
       $('tripCards').innerHTML = trips.length ? trips.map(function (t) {
         return '<a href="#" class="card trip-card" data-id="' + esc(t.id) + '"><p class="eyebrow">' + esc(t.datesText) + '</p><h2>' + esc(t.name) + '</h2>' +
           '<div class="row"><span class="chip ' + (t.status === 'Open' ? 'ok' : t.status === 'Draft' ? 'warn' : '') + '">' + esc(t.status) + '</span>' +
@@ -725,7 +727,7 @@
   });
 
   if (pass) {
-    admin('login').then(function (r) { if (r.ok) { showProblems(r.problems); loadTrips(); } }).catch(function () { /* */ });
+    admin('login').then(function (r) { if (r.ok) { showProblems(r.problems, r.bankProblems); loadTrips(); } }).catch(function () { /* */ });
   } else {
     views('loginView');
   }

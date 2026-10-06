@@ -26,7 +26,8 @@ Use a **club Google account** (not a personal one), because trip emails are sent
    money maths the website uses). Save.
 3. Choose the function **setup** in the toolbar and click **Run**. Approve the permissions (Google warns that the app is
    unverified because it is your own script: click Advanced, then Go to project).
-4. Fill in the **Settings** tab: contact email, the club bank account, and an **organiser passcode** of at least 10 characters.
+4. Fill in the **Settings** tab: contact email and an **organiser passcode** of at least 10 characters. The club bank
+   details can wait: sign-ups work without them, and they are only needed before "Ask for deposits and details".
 5. Run **setup** again. It says what is still missing, or that settings look good. The Rhine trip is created as a Draft.
 6. **Deploy > New deployment**, gear icon > **Web app**. Execute as **Me**, Who has access **Anyone**. Deploy, and copy the
    **Web app URL**.

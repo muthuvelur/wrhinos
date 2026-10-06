@@ -10,9 +10,9 @@ const DEFAULT_SETTINGS = {
   clubName: 'W/Rhinos Cycling Club',
   contactEmail: '',
   siteUrl: 'https://wrhinos.com',
-  bankAccountName: 'W/Rhinos Cycling Club',
-  bankSortCode: '00-00-00',
-  bankAccountNumber: '00000000',
+  bankAccountName: '',
+  bankSortCode: '',
+  bankAccountNumber: '',
   organiserPasscode: '',
 };
 
@@ -20,9 +20,9 @@ const SETTING_DEFS = [
   { key: 'clubName', label: 'Club name', help: 'Shown in emails', required: true },
   { key: 'contactEmail', label: 'Contact email', help: 'Replies to trip emails go here', required: true, type: 'email' },
   { key: 'siteUrl', label: 'Website', help: 'https://wrhinos.com (used for the private booking links in emails)', required: true, type: 'url' },
-  { key: 'bankAccountName', label: 'Bank account name', help: 'The club account, exactly as the bank shows it', required: true },
-  { key: 'bankSortCode', label: 'Bank sort code', help: '6 digits, e.g. 12-34-56', required: true, type: 'sortcode' },
-  { key: 'bankAccountNumber', label: 'Bank account number', help: '8 digits', required: true, type: 'account' },
+  { key: 'bankAccountName', label: 'Bank account name', help: 'The club account, exactly as the bank shows it. Can wait until you ask for deposits', required: false },
+  { key: 'bankSortCode', label: 'Bank sort code', help: '6 digits, e.g. 12-34-56. Can wait until you ask for deposits', required: false, type: 'sortcode' },
+  { key: 'bankAccountNumber', label: 'Bank account number', help: '8 digits. Can wait until you ask for deposits', required: false, type: 'account' },
   { key: 'organiserPasscode', label: 'Organiser passcode', help: 'At least 10 characters. Opens the organiser page. Share only with trip organisers', required: true, type: 'passcode' },
 ];
 
@@ -497,8 +497,10 @@ function buildLinksEmail_(list, cfg) {
   };
 }
 
+// Bank details are only needed once money is asked for, so sign-ups can open before the club account exists.
 function parseSettings_(vals) {
   const problems = [];
+  const bankProblems = [];
   const cfg = {};
   SETTING_DEFS.forEach(function (d) {
     let v = String(vals[d.key] === undefined || vals[d.key] === null ? '' : vals[d.key]).trim();
@@ -507,21 +509,26 @@ function parseSettings_(vals) {
     if (v && d.type === 'url' && !/^https:\/\/[^\s"'<>]+$/i.test(v)) problems.push('"' + d.label + '" must start with https://');
     if (v && d.type === 'sortcode') {
       const digits = v.replace(/\D/g, '');
-      if (digits.length !== 6) problems.push('"' + d.label + '" must have 6 digits.');
+      if (digits.length !== 6) bankProblems.push('"' + d.label + '" must have 6 digits.');
       else v = digits.slice(0, 2) + '-' + digits.slice(2, 4) + '-' + digits.slice(4);
     }
     if (v && d.type === 'account') {
       const digits = v.replace(/\D/g, '');
-      if (digits.length !== 8) problems.push('"' + d.label + '" must have 8 digits.');
+      if (digits.length !== 8) bankProblems.push('"' + d.label + '" must have 8 digits.');
       else v = digits;
     }
     if (v && d.type === 'passcode' && v.length < 10) problems.push('"' + d.label + '" must be at least 10 characters.');
     cfg[d.key] = v;
   });
   if (/^0+(-0+)*$/.test(cfg.bankSortCode || '') || /^0+$/.test(cfg.bankAccountNumber || '')) {
-    problems.push('The bank details are still the example ones. Enter the club account details.');
+    bankProblems.push('The bank details are example ones (zeros). Enter the club account details.');
+  }
+  if (!cfg.bankAccountName || !cfg.bankSortCode || !cfg.bankAccountNumber) {
+    bankProblems.push('The club bank details are not filled in yet. Sign-ups can open; add them before asking for deposits.');
   }
   cfg.problems = problems;
+  cfg.bankProblems = bankProblems;
+  cfg.bankReady = !bankProblems.length;
   return cfg;
 }
 
@@ -697,6 +704,7 @@ function register_(input) {
   if (cfg.problems.length) { console.error(cfg.problems.join(' ')); return { ok: false, error: 'Registration is not open yet. Please check back soon.' }; }
   const trip = tripById_(String(input.tripId || ''));
   if (!trip || trip.status !== 'Open') return { ok: false, error: 'Registration for this trip is not open.' };
+  if (trip.depositAtSignup === 'Yes' && !cfg.bankReady) { console.error(cfg.bankProblems.join(' ')); return { ok: false, error: 'Registration is not open yet. Please check back soon.' }; }
 
   const v = validateRegistration_(input, trip);
   if (v.errors.length) return { ok: false, error: v.errors.join(' '), errors: v.errors };
@@ -855,13 +863,13 @@ function admin_(input) {
   if (err) return { ok: false, error: err, auth: false };
   const cfg = settings_();
   switch (input.op) {
-    case 'login': return { ok: true, problems: cfg.problems };
+    case 'login': return { ok: true, problems: cfg.problems, bankProblems: cfg.bankProblems };
     case 'trips': {
       const bookings = readTable_('Bookings');
       const payments = readTable_('Payments');
       const calls = readTable_('Calls');
       return {
-        ok: true, problems: cfg.problems,
+        ok: true, problems: cfg.problems, bankProblems: cfg.bankProblems,
         trips: readTable_('Trips').map(function (t) {
           const x = publicTrip_(t, bookings);
           x.routesText = t.routes;
@@ -1000,6 +1008,7 @@ function admin_(input) {
       return { ok: true };
     }
     case 'call': {
+      if (!cfg.bankReady) return { ok: false, error: 'Add the club bank details in the Settings tab of the Google Sheet first, so people know where to pay.' };
       const trip = tripById_(String(input.tripId || ''));
       if (!trip) return { ok: false, error: 'Trip not found.' };
       const stage = ['Deposit', 'Interim', 'Final'].indexOf(input.stage) === -1 ? '' : input.stage;
@@ -1058,7 +1067,8 @@ function notify_(title, message) {
 function checkSettings() {
   const cfg = readSettings_();
   notify_(cfg.problems.length ? 'Please fix these in the Settings tab' : 'Settings look good',
-    cfg.problems.length ? '- ' + cfg.problems.join('\n- ') : 'The trips pages can take registrations.');
+    cfg.problems.length ? '- ' + cfg.problems.join('\n- ') : 'The trips pages can take registrations.' +
+      (cfg.bankReady ? '' : ' Bank details are not added yet: fine for sign-ups, needed before asking for deposits.'));
 }
 
 function setup() {

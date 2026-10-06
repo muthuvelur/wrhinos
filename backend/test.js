@@ -238,12 +238,17 @@ test('trip charity fee defaults to £50 and is checked', () => {
   assert.ok(C.validateTrip_(Object.assign({}, base, { charityFee: '-5' })).errors.length);
 });
 
-test('settings: example bank details and short passcode are flagged', () => {
+test('settings: short passcode blocks; missing or example bank details only block money', () => {
   let s = C.parseSettings_({ clubName: 'W', contactEmail: 'a@b.co', siteUrl: 'https://wrhinos.com', bankAccountName: 'W', bankSortCode: '00-00-00', bankAccountNumber: '00000000', organiserPasscode: 'short' });
-  assert.ok(s.problems.some((p) => /example/.test(p)));
   assert.ok(s.problems.some((p) => /10 characters/.test(p)));
+  assert.ok(s.bankProblems.some((p) => /example/.test(p)));
+  assert.strictEqual(s.bankReady, false);
+  s = C.parseSettings_({ clubName: 'W', contactEmail: 'a@b.co', siteUrl: 'https://wrhinos.com', organiserPasscode: 'long-enough-pass' });
+  assert.deepStrictEqual(s.problems, []);
+  assert.strictEqual(s.bankReady, false);
   s = C.parseSettings_({ clubName: 'W', contactEmail: 'a@b.co', siteUrl: 'https://wrhinos.com', bankAccountName: 'W', bankSortCode: '123456', bankAccountNumber: '1234 5678', organiserPasscode: 'long-enough-pass' });
   assert.deepStrictEqual(s.problems, []);
+  assert.strictEqual(s.bankReady, true);
   assert.strictEqual(s.bankSortCode, '12-34-56');
 });
 
