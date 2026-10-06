@@ -1059,9 +1059,11 @@ function onOpen() {
     .addToUi();
 }
 
+// Never a pop-up box: when run from the code editor, a box in the Sheet tab waits unseen until the run times out.
+// The message goes to the editor's Execution log and to a note in the corner of the Sheet instead.
 function notify_(title, message) {
-  try { SpreadsheetApp.getUi().alert(title, message, SpreadsheetApp.getUi().ButtonSet.OK); return; } catch (e) { /* run from editor */ }
   console.log(title + ': ' + message);
+  try { ss_().toast(message, title, 60); } catch (e) { /* log only */ }
 }
 
 function checkSettings() {
