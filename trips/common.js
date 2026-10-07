@@ -454,6 +454,34 @@
             }
             if (body.op === 'remind') return { ok: true, emailed: 0 };
           }
+          var addP = function (bk, person, force) {
+            var tt = db.trips.filter(function (x) { return x.id === bk.tripId; })[0];
+            var errs = checkPeople([{ fullName: 'x x', dob: '1970-01-01', role: 'Non-rider', mobile: '07000000000' }, person], tt.startDate);
+            if (errs.length) return { ok: false, error: errs.join(' ') };
+            if (bk.status === 'Booked' && tt.places - taken(db, tt.id) < 1 && !force) return { ok: false, needsForce: true, error: 'The trip is full.' };
+            var o = bikeOpts(tt).filter(function (x) { return x.label === person.bikeChoice; })[0], age = ageOn(person.dob, tt.startDate);
+            var n = bk.persons.reduce(function (m, p) { return Math.max(m, p.n); }, 0) + 1;
+            bk.persons.push(Object.assign({}, person, { n: n, under18: age !== null && age < 18 ? 'Yes' : 'No', bikeHire: o ? (o.hire ? 'Yes' : 'No') : '' }));
+            bk.people = bk.persons.length; bk.depositDue = bk.persons.filter(function (p) { return p.role !== 'Support crew'; }).length * tt.depositPerPerson;
+            save(db); return { ok: true };
+          };
+          var rmP = function (bk, n, byBooker) {
+            if (bk.persons.length < 2) return { ok: false, error: 'Cancel the booking instead.' };
+            if (byBooker && n === bk.persons[0].n) return { ok: false, error: 'The person who made the booking can’t be removed.' };
+            var tt = db.trips.filter(function (x) { return x.id === bk.tripId; })[0];
+            bk.persons = bk.persons.filter(function (p) { return p.n !== n; }); bk.people = bk.persons.length;
+            bk.depositDue = bk.persons.filter(function (p) { return p.role !== 'Support crew'; }).length * tt.depositPerPerson; bk.leadName = bk.persons[0].fullName;
+            save(db); return { ok: true };
+          };
+          if (body.action === 'addPerson' || body.action === 'removePerson') {
+            b = auth(db, body); if (!b) return { ok: false, error: 'This booking link is not recognised.' };
+            var res = body.action === 'addPerson' ? addP(b, body.person, false) : rmP(b, Number(body.n), true);
+            return res.ok ? view(db, b) : res;
+          }
+          if (body.action === 'admin' && (body.op === 'addPerson' || body.op === 'removePerson')) {
+            b = db.bookings.filter(function (x) { return x.ref === body.ref; })[0];
+            return body.op === 'addPerson' ? addP(b, body.person, body.force === true) : rmP(b, Number(body.n), false);
+          }
           if (body.action === 'withdraw') {
             b = auth(db, body); if (!b) return { ok: false, error: 'This booking link is not recognised.' };
             b.status = 'Cancelled'; b.organiserNotes = (b.organiserNotes ? b.organiserNotes + ' | ' : '') + 'Cancelled by the booker' + (body.reason ? ': ' + body.reason : '');

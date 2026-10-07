@@ -94,13 +94,20 @@
       return '<li><span>' + esc(x.label) + '</span>' + (x.url ? '<a class="btn btn-line btn-small" href="' + esc(x.url) + '" target="_blank" rel="noopener">Open route</a>' : '<span class="small muted">Coming soon</span>') + '</li>';
     }).join('');
 
-    $('peopleList').innerHTML = r.people.map(function (p) {
+    $('peopleList').innerHTML = r.people.map(function (p, i) {
       var sizing = p.bikeHire === 'Yes' ? [p.heightCm ? p.heightCm + ' cm tall' : '', p.insideLegCm ? 'inside leg ' + p.insideLegCm + ' cm' : '', p.pedals].filter(Boolean).join(', ') : '';
       return '<div style="border-top:1px solid var(--rule);padding-top:10px"><div class="row" style="justify-content:space-between"><b>' + esc(p.fullName) + '</b><span class="chip">' + esc(p.role) + (p.under18 === 'Yes' ? ' · under 18' : '') + '</span></div>' +
         '<div class="small muted">' + [p.bikeChoice || p.bikeType, sizing, p.bikeMake, p.dietary ? 'Diet: ' + p.dietary : ''].filter(Boolean).map(esc).join(' · ') +
         (p.under18 === 'Yes' && p.responsibleAdult ? '<br>Responsible adult: ' + esc(p.responsibleAdult) : '') +
-        (p.passportNumber ? '<br>Passport added ✓' : '') + '</div></div>';
+        (p.passportNumber ? '<br>Passport added ✓' : '') + '</div>' +
+        (i > 0 && b.status !== 'Cancelled' ? '<div class="rm-slot"><button type="button" class="linkbtn small" data-rm="' + esc(p.n) + '" data-name="' + esc(p.fullName) + '">Remove ' + esc(String(p.fullName).split(' ')[0]) + ' from this booking</button></div>' : '') +
+        '</div>';
     }).join('');
+    Array.prototype.forEach.call(document.querySelectorAll('#peopleList [data-rm]'), function (btn) {
+      btn.addEventListener('click', function () { confirmRemove(btn); });
+    });
+    $('addPersonBtn').hidden = b.status === 'Cancelled' || r.people.length >= 8;
+    $('addPersonBox').hidden = true;
 
     $('contact').innerHTML = [
       ['Email', b.email], ['Phone', b.mobile], ['Address', [b.address, b.postcode].filter(Boolean).join(', ')],
@@ -139,6 +146,55 @@
       fail(e.message || 'We couldn’t load your booking just now.');
     }).then(function () { $('updating').hidden = true; });
   }
+
+  // ---------- add or remove a person ----------
+  function confirmRemove(btn) {
+    var slot = btn.parentNode;
+    var name = btn.getAttribute('data-name');
+    slot.innerHTML = '<div class="notice small stack">Remove <b>' + esc(name) + '</b> from this booking? Their place is freed for someone else. ' +
+      'Money already paid stays with the booking.<div class="row"><button type="button" class="btn btn-primary btn-small" data-yes>Yes, remove</button>' +
+      '<button type="button" class="btn btn-line btn-small" data-no>Keep</button></div></div>';
+    slot.querySelector('[data-no]').addEventListener('click', function () { render(data); });
+    slot.querySelector('[data-yes]').addEventListener('click', function () {
+      this.disabled = true;
+      call({ action: 'removePerson', n: Number(btn.getAttribute('data-rm')) }).then(function (r) {
+        if (!r || !r.ok) { T.toast((r && r.error) || 'That didn’t work. Please try again.'); render(data); return; }
+        remember(r); render(r); T.toast(name + ' removed');
+      }).catch(function () { T.toast('That didn’t work. Check your connection and try again.'); render(data); });
+    });
+  }
+
+  $('addPersonBtn').addEventListener('click', function () {
+    var box = $('addPersonBox');
+    var i = data.people.length;
+    box.innerHTML = T.personHtml(i, {}, false, data.trip, false) +
+      '<div class="error" id="addPersonError" hidden></div>' +
+      '<div class="row"><button type="button" class="btn btn-primary" id="addPersonSave">Add to my booking</button>' +
+      '<button type="button" class="btn btn-line" id="addPersonCancel">Cancel</button></div>' +
+      '<p class="small muted" style="margin:0">Passport and own-bike details can be added later with Edit details.</p>';
+    var card = box.querySelector('.person');
+    card.querySelector('h3').textContent = 'New person';
+    var rm = card.querySelector('.remove-person'); if (rm) rm.remove();
+    T.wirePerson(card, data.trip.startDate);
+    box.hidden = false;
+    $('addPersonBtn').hidden = true;
+    card.querySelector('[data-k="fullName"]').focus();
+    $('addPersonCancel').addEventListener('click', function () { box.hidden = true; box.innerHTML = ''; $('addPersonBtn').hidden = false; });
+    $('addPersonSave').addEventListener('click', function () {
+      var p = T.readPerson(card);
+      var errs = T.checkPeople([{ fullName: 'x x', dob: '1970-01-01', role: 'Non-rider', mobile: '07000000000' }, p], data.trip.startDate)
+        .map(function (e) { return e.replace('Person 2', 'New person'); });
+      T.errorBox($('addPersonError'), errs);
+      if (errs.length) return;
+      var btn = this;
+      btn.disabled = true;
+      call({ action: 'addPerson', person: p }).then(function (r) {
+        if (!r || !r.ok) { T.errorBox($('addPersonError'), r && r.errors ? r.errors : [(r && r.error) || 'That didn’t save. Please try again.']); return; }
+        remember(r); render(r); T.toast(p.fullName + ' added');
+      }).catch(function () { T.errorBox($('addPersonError'), ['That didn’t save. Check your connection and try again.']); })
+        .then(function () { btn.disabled = false; });
+    });
+  });
 
   // ---------- can't come any more ----------
   $('withdrawBtn').addEventListener('click', function () { $('withdrawConfirm').hidden = false; $('withdrawBtn').hidden = true; });

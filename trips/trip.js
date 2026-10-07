@@ -34,7 +34,15 @@
         '<button type="button" class="linkbtn small" data-forget="' + esc(b.ref) + '" aria-label="Remove from this list">Remove</button></span></div>';
     }).join('');
     Array.prototype.forEach.call(document.querySelectorAll('[data-forget]'), function (btn) {
-      btn.addEventListener('click', function () { T.forgetBooking(btn.getAttribute('data-forget')); renderMine(); });
+      btn.addEventListener('click', function () {
+        var ref = btn.getAttribute('data-forget');
+        var holder = btn.parentNode;
+        holder.innerHTML = '<span class="small">Remove from this list on this phone? Your booking is <b>not</b> cancelled.</span> ' +
+          '<button type="button" class="btn btn-primary btn-small" data-yes>Remove</button> <button type="button" class="btn btn-line btn-small" data-no>Keep</button>';
+        holder.style.flexWrap = 'wrap';
+        holder.querySelector('[data-yes]').addEventListener('click', function () { T.forgetBooking(ref); renderMine(); });
+        holder.querySelector('[data-no]').addEventListener('click', renderMine);
+      });
     });
   }
 

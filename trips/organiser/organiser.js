@@ -261,15 +261,16 @@
           '<span class="row"><button type="button" class="btn btn-ok btn-small" data-act="confirm" data-id="' + esc(p.id) + '">In the bank ✓</button>' +
           '<button type="button" class="btn btn-line btn-small" data-act="reject" data-id="' + esc(p.id) + '">Not found</button></span></div>';
       }).join('') + '</div>' : '') +
-      '<div class="table-wrap"><table class="plain"><thead><tr><th>Name</th><th>Going as</th><th>Age</th><th>Bike</th><th>Diet</th><th>Phone</th><th>Passport</th></tr></thead><tbody>' +
+      '<div class="table-wrap"><table class="plain"><thead><tr><th>Name</th><th>Going as</th><th>Age</th><th>Bike</th><th>Diet</th><th>Phone</th><th>Passport</th><th></th></tr></thead><tbody>' +
       (b.persons || []).map(function (p) {
         var age = T.ageOn(p.dob, current.startDate);
         return '<tr><td>' + esc(p.fullName) + (p.under18 === 'Yes' ? '<br><span class="small muted">with ' + esc(p.responsibleAdult) + '</span>' : '') + '</td><td>' + esc(p.role) + '</td><td>' + (age === null ? '' : age) + '</td>' +
           '<td>' + esc([p.bikeChoice || p.bikeType, p.bikeMake, p.bikeColour].filter(Boolean).join(', ')) +
           (p.bikeHire === 'Yes' ? '<br><span class="small muted">' + esc([p.heightCm && 'height ' + p.heightCm, p.insideLegCm && 'leg ' + p.insideLegCm, p.frameSize && 'frame ' + p.frameSize, p.saddleHeightCm && 'saddle ' + p.saddleHeightCm, p.pedals].filter(Boolean).join(', ')) + '</span>' : '') +
           '</td><td>' + esc(p.dietary) + '</td><td>' + esc(p.mobile) + '</td>' +
-          '<td>' + (p.passportNumber ? esc(p.passportNumber) + '<br><span class="small muted">' + esc(p.passportCountry) + ' ' + esc(T.niceDate(p.passportExpiry)) + '</span>' : '<span class="chip warn">Missing</span>') + '</td></tr>' +
-          (p.safetyInfo ? '<tr><td colspan="6" class="small"><b>Safety:</b> ' + esc(p.safetyInfo) + '</td></tr>' : '');
+          '<td>' + (p.passportNumber ? esc(p.passportNumber) + '<br><span class="small muted">' + esc(p.passportCountry) + ' ' + esc(T.niceDate(p.passportExpiry)) + '</span>' : '<span class="chip warn">Missing</span>') + '</td>' +
+          '<td>' + ((b.persons || []).length > 1 && b.status !== 'Cancelled' ? '<button type="button" class="linkbtn small" data-act="rmperson" data-n="' + esc(p.n) + '" data-name="' + esc(p.fullName) + '">Remove</button>' : '') + '</td></tr>' +
+          (p.safetyInfo ? '<tr><td colspan="8" class="small"><b>Safety:</b> ' + esc(p.safetyInfo) + '</td></tr>' : '');
       }).join('') + '</tbody></table></div>' +
       '<dl class="kv"><dt>Email</dt><dd>' + esc(b.email) + '</dd><dt>Mobile</dt><dd>' + esc(b.mobile) + '</dd><dt>Address</dt><dd>' + esc(b.address) + ', ' + esc(b.postcode) + '</dd>' +
       '<dt>Emergency</dt><dd>' + esc(b.emergencyName) + ' (' + esc(b.emergencyRelation) + ') ' + esc(b.emergencyMobile) + '</dd>' +
@@ -282,9 +283,11 @@
       (b.mobile ? '<a class="btn btn-line btn-small" target="_blank" rel="noopener" href="' + esc(T.waLink(b.mobile, 'Hi ' + first + ', ')) + '">WhatsApp</a>' : '') +
       '<button type="button" class="btn btn-line btn-small" data-act="copylink">Copy their booking link</button>' +
       '<button type="button" class="btn btn-line btn-small" data-act="addpay">Record a payment</button>' +
+      (b.status !== 'Cancelled' ? '<button type="button" class="btn btn-line btn-small" data-act="addperson">Add a person</button>' : '') +
       (b.status === 'Waiting list' ? '<button type="button" class="btn btn-primary btn-small" data-act="offer">Give them places</button>' : '') +
       (b.status === 'Cancelled' ? '<button type="button" class="btn btn-line btn-small" data-act="restore">Restore booking</button>' : '<button type="button" class="btn btn-line btn-small" data-act="cancel">Cancel booking</button>') +
       '</div>' +
+      '<div class="stack addperson-box" hidden></div>' +
       '<form class="stack addpay-form" hidden novalidate><div class="grid2"><div class="field"><label>Amount (£)</label><input type="text" inputmode="decimal" class="ap-amount" value="' + (left || '') + '"></div>' +
       '<div class="field"><label>For</label><select class="ap-stage">' + T.STAGES.map(function (s) { return '<option>' + s + '</option>'; }).join('') + '</select></div></div>' +
       '<div class="grid2"><div class="field"><label>Paid on</label><input type="date" class="ap-date" value="' + T.today() + '"></div><div class="field"><label>Note</label><input type="text" class="ap-note" placeholder="e.g. cash at the club ride"></div></div>' +
@@ -313,6 +316,32 @@
     });
   }
 
+  function openAddPerson(d, b) {
+    var box = d.querySelector('.addperson-box');
+    box.innerHTML = T.personHtml(90, {}, false, current, false) + '<div class="error ap-error" hidden></div>' +
+      '<div class="row"><button type="button" class="btn btn-primary btn-small" data-act="addperson-save">Add to this booking</button>' +
+      '<button type="button" class="btn btn-line btn-small" data-act="addperson-cancel">Cancel</button></div>';
+    var card = box.querySelector('.person');
+    card.querySelector('h3').textContent = 'New person in ' + b.ref;
+    var rm = card.querySelector('.remove-person'); if (rm) rm.remove();
+    T.wirePerson(card, current.startDate);
+    box.hidden = false;
+    card.querySelector('[data-k="fullName"]').focus();
+  }
+  function saveAddPerson(d, ref, force) {
+    var box = d.querySelector('.addperson-box');
+    var p = T.readPerson(box.querySelector('.person'));
+    var errs = T.checkPeople([{ fullName: 'x x', dob: '1970-01-01', role: 'Non-rider', mobile: '07000000000' }, p], current.startDate).map(function (e) { return e.replace('Person 2', 'New person'); });
+    T.errorBox(box.querySelector('.ap-error'), errs);
+    if (errs.length) return;
+    act(admin('addPerson', { ref: ref, person: p, force: force }), p.fullName + ' added', ref).then(function (r) {
+      if (r && r.needsForce) {
+        var s = box.querySelector('[data-act="addperson-save"]');
+        if (s) { s.textContent = 'Add anyway (over the limit)'; s.setAttribute('data-act', 'addperson-force'); }
+      }
+    });
+  }
+
   function wireBookings() {
     Array.prototype.forEach.call(document.querySelectorAll('#bookingList details.booking'), function (d) {
       var ref = d.getAttribute('data-ref');
@@ -336,6 +365,13 @@
           act(admin('setStatus', { ref: ref, status: 'Cancelled' }), 'Booking cancelled', ref);
         }
         else if (a === 'restore') act(admin('setStatus', { ref: ref, status: 'Waiting list' }), 'Moved to the waiting list', ref);
+        else if (a === 'rmperson') {
+          if (btn.getAttribute('data-sure') !== '1') { btn.setAttribute('data-sure', '1'); btn.textContent = 'Tap again to remove ' + btn.getAttribute('data-name').split(' ')[0]; return; }
+          act(admin('removePerson', { ref: ref, n: Number(btn.getAttribute('data-n')) }), btn.getAttribute('data-name') + ' removed', ref);
+        }
+        else if (a === 'addperson') openAddPerson(d, b);
+        else if (a === 'addperson-save' || a === 'addperson-force') saveAddPerson(d, ref, a === 'addperson-force');
+        else if (a === 'addperson-cancel') { var bx = d.querySelector('.addperson-box'); bx.hidden = true; bx.innerHTML = ''; }
         else if (a === 'notes') act(admin('saveNotes', { ref: ref, notes: d.querySelector('.org-notes').value }), 'Notes saved', ref);
       });
       d.querySelector('.addpay-form').addEventListener('submit', function (e) {

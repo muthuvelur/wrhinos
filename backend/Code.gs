@@ -730,6 +730,18 @@ function doPost(e) {
       case 'update': return json_(updateBooking_(body));
       case 'resend': return json_(resendLinks_(body));
       case 'withdraw': return json_(withdraw_(body));
+      case 'addPerson': {
+        const b = authBooking_(body);
+        if (!b) return json_({ ok: false, error: 'This booking link is not recognised.' });
+        const r = addPerson_(b, body.person, false, 'the booker');
+        return json_(r.ok ? bookingView_(r.booking) : r);
+      }
+      case 'removePerson': {
+        const b = authBooking_(body);
+        if (!b) return json_({ ok: false, error: 'This booking link is not recognised.' });
+        const r = removePerson_(b, Number(body.n), 'the booker');
+        return json_(r.ok ? bookingView_(r.booking) : r);
+      }
       case 'admin': return json_(admin_(body));
       default: return json_({ ok: false, error: 'Unknown request.' });
     }
@@ -935,6 +947,76 @@ function updateBooking_(input) {
   return bookingView_(Object.assign(nb, { _row: b._row }));
 }
 
+// ---------- adding and removing people in an existing booking ----------
+// The booking keeps one reference and one bill. Person numbers are never reused, because expense room lists
+// refer to people by booking reference and number.
+function peopleOf_(ref) {
+  return readTable_('People').filter(function (p) { return p.ref === ref; }).sort(function (x, y) { return Number(x.n) - Number(y.n); });
+}
+
+function tellOrganisers_(subject, lines) {
+  const cfg = settings_();
+  if (cfg.contactEmail) sendMail_(cfg.contactEmail, { subject: subject, body: lines.concat(['', 'Organiser page: wrhinos.com/organiser']).join('\n') });
+}
+
+function addPerson_(b, input, force, by) {
+  const trip = tripById_(b.tripId);
+  if (!trip) return { ok: false, error: 'Trip not found.' };
+  if (b.status === 'Cancelled') return { ok: false, error: 'This booking is cancelled, so people can’t be added to it.' };
+  const existing = peopleOf_(b.ref);
+  if (existing.length >= MAX_PEOPLE_PER_BOOKING) return { ok: false, error: 'A booking can have up to ' + MAX_PEOPLE_PER_BOOKING + ' people. Make a second booking for anyone else.' };
+  const v = validatePerson_(input, existing.length, trip, false);
+  if (v.errors.length) return { ok: false, error: v.errors.join(' '), errors: v.errors };
+  if (existing.some(function (p) { return String(p.fullName).toLowerCase() === v.value.fullName.toLowerCase(); })) return { ok: false, error: v.value.fullName + ' is already in this booking.' };
+  if (b.status === 'Booked') {
+    const left = Number(trip.places) - placesTaken_(readTable_('Bookings'), trip.id);
+    if (left < 1 && !force) {
+      return { ok: false, full: true, needsForce: true, error: by === 'the booker'
+        ? 'Sorry, the trip is full, so nobody can be added to this booking. They can make their own booking to join the waiting list.'
+        : 'The trip is full. Adding this person takes it over the limit.' };
+    }
+  }
+  const n = existing.reduce(function (m, p) { return Math.max(m, Number(p.n) || 0); }, 0) + 1;
+  const p = Object.assign({}, v.value, { ref: b.ref, tripId: b.tripId, n: n, under18: v.value.under18 ? 'Yes' : 'No' });
+  delete p.responsibleAdultElsewhere;
+  appendRows_('People', [p]);
+  const all = existing.concat([p]);
+  const when = Utilities.formatDate(new Date(), 'Europe/London', 'd MMM yyyy');
+  const nb = Object.assign({}, b, { people: all.length, depositDue: depositFor_(all, trip.depositPerPerson), updatedAt: new Date().toISOString(),
+    organiserNotes: (b.organiserNotes ? b.organiserNotes + ' | ' : '') + p.fullName + ' added by ' + by + ' on ' + when });
+  updateRow_('Bookings', b._row, nb);
+  if (by === 'the booker') {
+    tellOrganisers_('Person added: ' + p.fullName + ' to ' + b.ref + ' – ' + trip.name, [
+      b.leadName + ' added ' + p.fullName + ' (' + p.role + (p.under18 === 'Yes' ? ', under 18' : '') + ') to booking ' + b.ref + ' for ' + trip.name + '.',
+      'The booking now has ' + all.length + ' people.']);
+  }
+  return { ok: true, booking: Object.assign(nb, { _row: b._row }) };
+}
+
+function removePerson_(b, n, by) {
+  const trip = tripById_(b.tripId);
+  const existing = peopleOf_(b.ref);
+  const p = existing.filter(function (x) { return Number(x.n) === n; })[0];
+  if (!p) return { ok: false, error: 'That person isn’t in this booking any more. Reload the page.' };
+  if (existing.length === 1) return { ok: false, error: 'They’re the only person in this booking. Cancel the booking instead.' };
+  if (by === 'the booker' && Number(p.n) === Number(existing[0].n)) return { ok: false, error: 'The person who made the booking can’t be removed. To cancel everyone, use “I can no longer come”.' };
+  deleteRows_('People', [p._row]);
+  const left = existing.filter(function (x) { return x !== p; });
+  const lead = left[0];
+  const when = Utilities.formatDate(new Date(), 'Europe/London', 'd MMM yyyy');
+  const nb = Object.assign({}, b, { people: left.length, depositDue: depositFor_(left, trip ? trip.depositPerPerson : 0),
+    leadName: lead.fullName, updatedAt: new Date().toISOString(),
+    organiserNotes: (b.organiserNotes ? b.organiserNotes + ' | ' : '') + p.fullName + ' removed by ' + by + ' on ' + when });
+  updateRow_('Bookings', b._row, nb);
+  if (by === 'the booker' && trip) {
+    tellOrganisers_('Person removed: ' + p.fullName + ' from ' + b.ref + ' – ' + trip.name, [
+      b.leadName + ' removed ' + p.fullName + ' from booking ' + b.ref + ' for ' + trip.name + '.',
+      'The booking now has ' + left.length + (left.length === 1 ? ' person.' : ' people.'),
+      'If they were in a room in an expense, that room now has a share nobody is paying: check the Expenses tab.']);
+  }
+  return { ok: true, booking: Object.assign(nb, { _row: b._row }) };
+}
+
 // "I can no longer come": the booker cancels their own booking. The record stays (marked Cancelled, with the date and
 // any reason), the places are freed, and the organisers are emailed so they can offer them to the waiting list.
 function withdraw_(input) {
@@ -1107,6 +1189,18 @@ function admin_(input) {
       if (!b) return { ok: false, error: 'Booking not found.' };
       updateRow_('Bookings', b._row, Object.assign({}, b, { organiserNotes: clean_(input.notes, 1000) }));
       return { ok: true };
+    }
+    case 'addPerson': {
+      const b = readTable_('Bookings').filter(function (x) { return x.ref === String(input.ref || ''); })[0];
+      if (!b) return { ok: false, error: 'Booking not found.' };
+      const r = addPerson_(b, input.person, input.force === true, 'an organiser');
+      return r.ok ? { ok: true } : r;
+    }
+    case 'removePerson': {
+      const b = readTable_('Bookings').filter(function (x) { return x.ref === String(input.ref || ''); })[0];
+      if (!b) return { ok: false, error: 'Booking not found.' };
+      const r = removePerson_(b, Number(input.n), 'an organiser');
+      return r.ok ? { ok: true } : r;
     }
     case 'money': {
       const trip = tripById_(String(input.tripId || ''));
