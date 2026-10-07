@@ -690,12 +690,54 @@ function doPost(e) {
   }
 }
 
-function sendMail_(to, mail) {
+// Gmail allows about 100 script emails a day. Each send can say how many it needs to leave spare, so that a flood of
+// sign-ups can't use up the allowance that organiser emails and warnings need.
+function sendMail_(to, mail, keepSpare) {
   const cfg = settings_();
   try {
+    if (MailApp.getRemainingDailyQuota() <= (keepSpare || 0)) { console.error('Daily email allowance nearly used up; not sent: ' + mail.subject); return false; }
     MailApp.sendEmail({ to: to, subject: mail.subject, body: mail.body, replyTo: cfg.contactEmail, name: cfg.clubName });
     return true;
   } catch (err) { console.error(err); return false; }
+}
+
+// ---------- flood protection ----------
+const SIGNUP_LIMIT = 15;            // new bookings allowed in any 10-minute window
+const SIGNUP_WINDOW_SECONDS = 600;
+const RESEND_LIMIT_PER_HOUR = 30;   // "Lost your link?" emails across everyone
+const EMAIL_SPARE_FOR_SIGNUPS = 15; // sign-up emails stop when fewer than this many are left today
+
+// Counts events in a fixed time window, shared by every visitor. Returns true while under the limit.
+function underLimit_(name, limit, windowSeconds) {
+  const cache = CacheService.getScriptCache();
+  const key = name + ':' + Math.floor(Date.now() / (windowSeconds * 1000));
+  return Number(cache.get(key) || 0) < limit;
+}
+function countEvent_(name, windowSeconds) {
+  const cache = CacheService.getScriptCache();
+  const key = name + ':' + Math.floor(Date.now() / (windowSeconds * 1000));
+  cache.put(key, String(Number(cache.get(key) || 0) + 1), windowSeconds + 60);
+}
+
+// The first time a limit is hit in an hour, tell the organisers so they can check the bookings for fakes.
+function warnOrganisers_(what) {
+  const cache = CacheService.getScriptCache();
+  if (cache.get('warned:' + what)) return;
+  cache.put('warned:' + what, '1', 3600);
+  const cfg = settings_();
+  if (!cfg.contactEmail) return;
+  sendMail_(cfg.contactEmail, {
+    subject: 'W/Rhinos trips: unusual activity (' + what + ')',
+    body: ['The trips booking system has just hit its safety limit: ' + what + '.', '',
+      'This can be real (a very popular trip) or someone trying to flood the sign-ups.',
+      'Please look at the latest bookings on the organiser page (wrhinos.com/organiser) and cancel any that look fake.', '',
+      'The limit resets by itself within a few minutes. Nothing else needs doing.'].join('\n'),
+  });
+}
+
+// An email can hold one live booking per trip; the family goes in that one booking.
+function existingForEmail_(bookings, tripId, email) {
+  return bookings.filter(function (x) { return x.tripId === tripId && x.status !== 'Cancelled' && String(x.email).toLowerCase() === email; })[0] || null;
 }
 
 function register_(input) {
@@ -718,6 +760,18 @@ function register_(input) {
       depositDays: Number(trip.depositDays), depositAtSignup: trip.depositAtSignup === 'Yes' ? 'Yes' : 'No', bank: bank_(cfg), email: dup.email };
   }
 
+  const same = existingForEmail_(bookings, trip.id, v.booking.email);
+  if (same) {
+    return { ok: false, alreadyRegistered: true, error: 'This email address already has a booking for this trip (reference ' + same.ref + '). ' +
+      'To change it, open your booking link from the confirmation email. Lost it? Use "Lost your booking link?" on wrhinos.com/trips. ' +
+      'To add someone to your booking, ask the organiser.' };
+  }
+
+  if (!underLimit_('signups', SIGNUP_LIMIT, SIGNUP_WINDOW_SECONDS)) {
+    warnOrganisers_('more than ' + SIGNUP_LIMIT + ' sign-ups in 10 minutes');
+    return { ok: false, busy: true, error: 'Lots of people are signing up right now. Please wait a few minutes and press Register again. Your details are still filled in.' };
+  }
+
   const left = Number(trip.places) - placesTaken_(bookings, trip.id);
   const b = v.booking;
   b.status = v.people.length <= left ? 'Booked' : 'Waiting list';
@@ -733,11 +787,10 @@ function register_(input) {
   b.tripId = trip.id;
   b.bookedAt = new Date().toISOString();
   b.updatedAt = b.bookedAt;
-  const others = bookings.filter(function (x) { return x.tripId === trip.id && x.status !== 'Cancelled' && String(x.email).toLowerCase() === b.email; });
-  b.organiserNotes = others.length ? 'CHECK: same email as ' + others.map(function (x) { return x.ref; }).join(', ') : '';
-  if (v.people.some(function (p) { return p.responsibleAdultElsewhere; })) b.organiserNotes += (b.organiserNotes ? ' | ' : '') + 'CHECK: a responsible adult is not in this booking';
+  b.organiserNotes = v.people.some(function (p) { return p.responsibleAdultElsewhere; }) ? 'CHECK: a responsible adult is not in this booking' : '';
 
   appendRows_('Bookings', [b]);
+  countEvent_('signups', SIGNUP_WINDOW_SECONDS);
   appendRows_('People', v.people.map(function (p, i) {
     const row = Object.assign({}, p, { ref: b.ref, tripId: trip.id, n: i + 1, under18: p.under18 ? 'Yes' : 'No' });
     delete row.responsibleAdultElsewhere;
@@ -745,7 +798,8 @@ function register_(input) {
   }));
 
   const link = bookingLink_(cfg.siteUrl, b.ref, b.token);
-  const sent = sendMail_(b.email, buildRegistrationEmail_(b, v.people, trip, cfg, link));
+  const sent = sendMail_(b.email, buildRegistrationEmail_(b, v.people, trip, cfg, link), EMAIL_SPARE_FOR_SIGNUPS);
+  if (!sent) warnOrganisers_('the daily email allowance is nearly used up, so confirmation emails are paused until tomorrow');
   return { ok: true, ref: b.ref, status: b.status, link: link, depositDue: b.depositDue, depositDays: Number(trip.depositDays),
     depositAtSignup: trip.depositAtSignup === 'Yes' ? 'Yes' : 'No', bank: bank_(cfg), emailSent: sent, email: b.email };
 }
@@ -839,12 +893,17 @@ function resendLinks_(input) {
   const key = 'resend:' + email;
   if (cache.get(key)) return done;
   cache.put(key, '1', 600);
+  if (!underLimit_('resends', RESEND_LIMIT_PER_HOUR, 3600)) {
+    warnOrganisers_('more than ' + RESEND_LIMIT_PER_HOUR + ' "Lost your link" requests in an hour');
+    return done;
+  }
+  countEvent_('resends', 3600);
   const cfg = settings_();
   const trips = {};
   readTable_('Trips').forEach(function (t) { trips[t.id] = t; });
   const list = readTable_('Bookings').filter(function (b) { return String(b.email).toLowerCase() === email && b.status !== 'Cancelled'; })
     .map(function (b) { return { ref: b.ref, trip: trips[b.tripId] ? trips[b.tripId].name : 'Trip', link: bookingLink_(cfg.siteUrl, b.ref, b.token) }; });
-  if (list.length) sendMail_(email, buildLinksEmail_(list, cfg));
+  if (list.length) sendMail_(email, buildLinksEmail_(list, cfg), EMAIL_SPARE_FOR_SIGNUPS);
   return done;
 }
 
@@ -1130,5 +1189,6 @@ if (typeof module !== 'undefined') {
     buildRegistrationEmail_: buildRegistrationEmail_, buildPlaceOfferedEmail_: buildPlaceOfferedEmail_, parseSettings_: parseSettings_,
     buildCallEmail_: buildCallEmail_, buildReminderEmail_: buildReminderEmail_, buildLinksEmail_: buildLinksEmail_,
     safeCell_: safeCell_, REF_BLOCKED: REF_BLOCKED, parseBikeOptions_: parseBikeOptions_, missingDetails_: missingDetails_,
+    existingForEmail_: existingForEmail_, underLimit_: underLimit_, countEvent_: countEvent_, SIGNUP_LIMIT: SIGNUP_LIMIT,
   };
 }

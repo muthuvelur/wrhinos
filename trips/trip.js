@@ -195,7 +195,20 @@
         $('fullPanel').scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
       }
-      if (!r || !r.ok) { T.errorBox($('regError'), r && r.errors ? r.errors : [(r && r.error) || 'Something went wrong. Please try again.']); return; }
+      if (!r || !r.ok) {
+        T.errorBox($('regError'), r && r.errors ? r.errors : [(r && r.error) || 'Something went wrong. Please try again.']);
+        if (r && r.alreadyRegistered) {
+          var a = document.createElement('a');
+          a.href = '/trips/#lost';
+          a.textContent = 'Email me my booking link';
+          a.style.display = 'inline-block';
+          a.style.marginTop = '8px';
+          a.style.fontWeight = '700';
+          $('regError').appendChild(document.createElement('br'));
+          $('regError').appendChild(a);
+        }
+        return;
+      }
       showResult(r);
     }).catch(function () {
       T.errorBox($('regError'), ['We couldn’t confirm your registration on screen, but it may have gone through. Check your email first. If nothing has arrived in a few minutes, press Register again: it won’t create a second booking.']);

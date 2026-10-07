@@ -231,6 +231,29 @@ test('sign-up-first email asks for nothing yet; details still missing are listed
   assert.deepStrictEqual(missing, ['Asha Rider: passport details', 'Asha Rider: bike make and colour', 'Kavi Rider: height and inside leg for the hire bike', 'Emergency contact']);
 });
 
+test('flood protection: one live booking per email per trip', () => {
+  const bookings = [
+    { ref: 'RAKIM', tripId: 'rhine-2027', status: 'Booked', email: 'asha@example.com' },
+    { ref: 'BOLAN', tripId: 'rhine-2027', status: 'Cancelled', email: 'gone@example.com' },
+    { ref: 'SUDEV', tripId: 'lakes-2027', status: 'Booked', email: 'other@example.com' },
+  ];
+  assert.strictEqual(C.existingForEmail_(bookings, 'rhine-2027', 'asha@example.com').ref, 'RAKIM');
+  assert.strictEqual(C.existingForEmail_(bookings, 'rhine-2027', 'gone@example.com'), null);
+  assert.strictEqual(C.existingForEmail_(bookings, 'rhine-2027', 'other@example.com'), null);
+});
+
+test('flood protection: sign-up speed limit counts within a window', () => {
+  const store = {};
+  global.CacheService = { getScriptCache: () => ({ get: (k) => store[k] || null, put: (k, v) => { store[k] = v; } }) };
+  for (let i = 0; i < C.SIGNUP_LIMIT; i++) {
+    assert.strictEqual(C.underLimit_('signups', C.SIGNUP_LIMIT, 600), true);
+    C.countEvent_('signups', 600);
+  }
+  assert.strictEqual(C.underLimit_('signups', C.SIGNUP_LIMIT, 600), false);
+  assert.strictEqual(C.underLimit_('resends', 30, 3600), true);
+  delete global.CacheService;
+});
+
 test('trip charity fee defaults to £50 and is checked', () => {
   const base = { name: 'Rhine', datesText: 'May', startDate: '2027-05-28', places: 50, depositPerPerson: 100, depositDays: 7 };
   assert.strictEqual(C.validateTrip_(base).value.charityFee, 50);
