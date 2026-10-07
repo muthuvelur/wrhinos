@@ -116,13 +116,28 @@
     $('view').hidden = false;
   }
 
+  // This phone's last copy of the booking shows at once; the live version replaces it when Google answers.
+  var CACHE_KEY = 'wrhinos-booking:' + auth.ref;
+  function cached() {
+    try { var c = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); return c && c.token === auth.token ? c.view : null; } catch (e) { return null; }
+  }
+  function remember(r) { try { localStorage.setItem(CACHE_KEY, JSON.stringify({ token: auth.token, view: r })); } catch (e) { /* no storage: just slower */ } }
+  function forget() { try { localStorage.removeItem(CACHE_KEY); } catch (e) { /* */ } }
+
   function load() {
     if (!/^[A-Z]{5}$/.test(auth.ref) || auth.token.length < 10) { fail('This booking link isn’t complete. Open it again from your email, or copy the whole link.'); return; }
+    var quick = cached();
+    if (quick) { render(quick); $('updating').hidden = false; }
     call({ action: 'booking' }).then(function (r) {
-      if (r && r.ok === false && /not recognised/.test(r.error || '')) T.forgetBooking(auth.ref);
+      if (r && r.ok === false && /not recognised/.test(r.error || '')) { T.forgetBooking(auth.ref); forget(); }
       if (!r || !r.ok) throw new Error((r && r.error) || '');
-      render(r);
-    }).catch(function (e) { fail(e.message || 'We couldn’t load your booking just now.'); });
+      remember(r);
+      if ($('editView').hidden) render(r); else data = r;
+    }).catch(function (e) {
+      if (quick && !/not recognised/.test(e.message || '')) { T.toast('Couldn’t refresh just now; showing your last copy'); return; }
+      $('view').hidden = true;
+      fail(e.message || 'We couldn’t load your booking just now.');
+    }).then(function () { $('updating').hidden = true; });
   }
 
   // ---------- can't come any more ----------
@@ -134,7 +149,7 @@
     call({ action: 'withdraw', reason: $('withdrawReason').value.trim() }).then(function (r) {
       if (!r || !r.ok) { T.errorBox($('withdrawError'), [(r && r.error) || 'That didn’t work. Please try again.']); return; }
       $('withdrawConfirm').hidden = true;
-      render(r);
+      remember(r); render(r);
       window.scrollTo(0, 0);
       T.toast('Booking cancelled');
     }).catch(function () { T.errorBox($('withdrawError'), ['That didn’t work. Check your connection and try again.']); })
@@ -159,7 +174,7 @@
     call({ action: 'claim', amount: amount, stage: $('cStage').value, paidOn: $('cDate').value, note: $('cNote').value.trim() }).then(function (r) {
       if (!r || !r.ok) { T.errorBox($('claimError'), [(r && r.error) || 'That didn’t save. Please try again.']); return; }
       $('claimForm').hidden = true; $('paidBtn').hidden = false; $('cNote').value = '';
-      render(r);
+      remember(r); render(r);
       T.toast('Thanks, the organiser will check it');
     }).catch(function () { T.errorBox($('claimError'), ['That didn’t save. Check your connection and try again.']); })
       .then(function () { $('claimSubmit').disabled = false; });
@@ -195,7 +210,7 @@
       lead: { email: $('email').value.trim(), address: $('address').value.trim(), emergencyName: $('emergencyName').value.trim(), emergencyRelation: $('emergencyRelation').value.trim(), emergencyMobile: $('emergencyMobile').value.trim() },
     }).then(function (r) {
       if (!r || !r.ok) { T.errorBox($('editError'), r && r.errors ? r.errors : [(r && r.error) || 'That didn’t save. Please try again.']); return; }
-      render(r); window.scrollTo(0, 0); T.toast('Saved');
+      remember(r); render(r); window.scrollTo(0, 0); T.toast('Saved');
     }).catch(function () { T.errorBox($('editError'), ['That didn’t save. Check your connection and try again.']); })
       .then(function () { $('saveBtn').disabled = false; });
   });
