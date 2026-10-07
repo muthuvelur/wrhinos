@@ -11,7 +11,8 @@ Until it is connected, the pages run in **preview mode**: everything works, but 
 | People | One row per person going: name, date of birth, role, bike, diet, passport, safety info |
 | Payments | Deposits and other payments: claimed by riders, confirmed by the organiser |
 | Expenses | Each trip cost (hotels, support company, lorry...) and how it is shared |
-| Calls | Interim payments and the final balance, when they were asked for |
+| Payment requests | Each time organisers asked for money (deposits, interim, final balance) |
+| <Trip> – People, Bookings, Payments, Expenses, Payment requests | Read-only tabs per trip, filled automatically from the main tabs. Use these to read, sort or copy a trip's data |
 
 Organisers normally work from `wrhinos.com/trips/organiser/`, not the Sheet. The Sheet is the record, and is handy for
 sorting and exporting (for example the dietary list for a hotel).

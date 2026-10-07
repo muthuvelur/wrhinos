@@ -557,12 +557,18 @@ function schema_(name) {
   return { keys: cols.map(function (c) { return c[0]; }), headers: cols.map(function (c) { return c[1]; }), idx: idx };
 }
 
+// The tab name people see. "Calls" is the old name for the record of payment requests.
+const TAB_NAMES = { Calls: 'Payment requests' };
+function tabName_(table) { return TAB_NAMES[table] || table; }
+
 function sheet_(name) {
   const ss = ss_();
-  let sh = ss.getSheetByName(name);
+  const tab = tabName_(name);
+  let sh = ss.getSheetByName(tab);
+  if (!sh && tab !== name && ss.getSheetByName(name)) { sh = ss.getSheetByName(name); sh.setName(tab); }
   const S = schema_(name);
   if (!sh) {
-    sh = ss.insertSheet(name);
+    sh = ss.insertSheet(tab);
     sh.getRange(1, 1, 1, S.headers.length).setValues([S.headers]).setFontWeight('bold').setBackground('#161616').setFontColor('#ffffff');
     sh.setFrozenRows(1);
     sh.getRange(2, 1, sh.getMaxRows() - 1, S.headers.length).setNumberFormat('@');
@@ -574,6 +580,43 @@ function sheet_(name) {
     sh.getRange(2, from, sh.getMaxRows() - 1, S.headers.length - from + 1).setNumberFormat('@');
   }
   return sh;
+}
+
+// ---------- per-trip tabs ----------
+// Every trip gets its own read-only tabs that show just that trip's rows, filled by a formula from the main tabs,
+// so nobody has to filter. The main tabs stay the single place the website reads and writes.
+const TRIP_TABS = [['People', 'People'], ['Bookings', 'Bookings'], ['Payments', 'Payments'], ['Expenses', 'Expenses'], ['Calls', 'Payment requests']];
+const HIDDEN_IN_TRIP_TABS = ['tripId', 'token', 'detail'];
+
+function colLetter_(n) {
+  let s = '';
+  while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); }
+  return s;
+}
+function tripLabel_(id) {
+  return String(id).split('-').map(function (w) { return w.charAt(0).toUpperCase() + w.slice(1); }).join(' ');
+}
+function tripTabName_(id, label) { return tripLabel_(id) + ' – ' + label; }
+function tripTabFormula_(table, tripId) {
+  const S = schema_(table);
+  const src = "'" + tabName_(table) + "'!A:" + colLetter_(S.keys.length);
+  const cols = S.keys.map(function (k, i) { return HIDDEN_IN_TRIP_TABS.indexOf(k) === -1 ? colLetter_(i + 1) : null; }).filter(Boolean);
+  return '=QUERY(' + src + ', "select ' + cols.join(', ') + ' where ' + colLetter_(S.idx.tripId) + " = '" + String(tripId).replace(/[^a-z0-9-]/g, '') + "'\", 1)";
+}
+
+function makeTripTabs_(trip) {
+  const ss = ss_();
+  TRIP_TABS.forEach(function (t) {
+    sheet_(t[0]);
+    const name = tripTabName_(trip.id, t[1]);
+    if (ss.getSheetByName(name)) return;
+    const sh = ss.insertSheet(name);
+    sh.getRange('A1').setFormula(tripTabFormula_(t[0], trip.id));
+    sh.getRange(1, 1, 1, sh.getMaxColumns()).setFontWeight('bold').setBackground('#c21f2a').setFontColor('#ffffff');
+    sh.setFrozenRows(1);
+    sh.setTabColor('#c21f2a');
+    sh.protect().setDescription('Filled automatically from the main tabs. Make changes on the organiser page.').setWarningOnly(true);
+  });
 }
 
 // Everything money for one trip, worked out by Money.gs (the same code the website uses).
@@ -964,6 +1007,7 @@ function admin_(input) {
       } else {
         t.id = newTripId_(input.trip.slug, t.name, t.startDate, ids);
         appendRows_('Trips', [Object.assign(t, { createdAt: now, updatedAt: now })]);
+        try { makeTripTabs_(t); } catch (e) { console.error('Trip tabs: ' + e); }
       }
       return { ok: true, id: t.id };
     }
@@ -1124,6 +1168,7 @@ function admin_(input) {
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('W/Rhinos trips')
     .addItem('Check settings', 'checkSettings')
+    .addItem('Make tabs for each trip', 'makeAllTripTabs')
     .addItem('First-time setup', 'setup')
     .addToUi();
 }
@@ -1133,6 +1178,11 @@ function onOpen() {
 function notify_(title, message) {
   console.log(title + ': ' + message);
   try { ss_().toast(message, title, 60); } catch (e) { /* log only */ }
+}
+
+function makeAllTripTabs() {
+  readTable_('Trips').forEach(function (t) { makeTripTabs_(t); });
+  notify_('Trip tabs', 'Each trip now has its own People, Bookings, Payments, Expenses and Payment requests tabs.');
 }
 
 function checkSettings() {
@@ -1162,6 +1212,7 @@ function setup() {
     delete t.detailsUrl;
     appendRows_('Trips', [t]);
   }
+  readTable_('Trips').forEach(function (t) { try { makeTripTabs_(t); } catch (e) { console.error('Trip tabs for ' + t.id + ': ' + e); } });
   ['Trips', 'Bookings', 'People', 'Payments'].forEach(function (name) {
     const sh = sheet_(name);
     const col = schema_(name).idx.status;
@@ -1197,6 +1248,6 @@ if (typeof module !== 'undefined') {
     buildRegistrationEmail_: buildRegistrationEmail_, buildPlaceOfferedEmail_: buildPlaceOfferedEmail_, parseSettings_: parseSettings_,
     buildCallEmail_: buildCallEmail_, buildReminderEmail_: buildReminderEmail_, buildLinksEmail_: buildLinksEmail_,
     safeCell_: safeCell_, REF_BLOCKED: REF_BLOCKED, parseBikeOptions_: parseBikeOptions_, missingDetails_: missingDetails_,
-    newTripId_: newTripId_, existingForEmail_: existingForEmail_, underLimit_: underLimit_, countEvent_: countEvent_, SIGNUP_LIMIT: SIGNUP_LIMIT,
+    newTripId_: newTripId_, tripTabFormula_: tripTabFormula_, tripTabName_: tripTabName_, tabName_: tabName_, existingForEmail_: existingForEmail_, underLimit_: underLimit_, countEvent_: countEvent_, SIGNUP_LIMIT: SIGNUP_LIMIT,
   };
 }

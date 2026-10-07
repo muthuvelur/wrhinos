@@ -261,6 +261,20 @@ test('new trip web names: organiser choice if free, else short name plus year', 
   assert.strictEqual(C.newTripId_('Bad Name!', 'Lakes', '2027-06-01', {}), 'lakes-2027');
 });
 
+test('per-trip tabs: names and the formula that fills them', () => {
+  assert.strictEqual(C.tripTabName_('rhine-2027', 'People'), 'Rhine 2027 – People');
+  assert.strictEqual(C.tripTabName_('mallorca-2027', 'Payment requests'), 'Mallorca 2027 – Payment requests');
+  assert.strictEqual(C.tabName_('Calls'), 'Payment requests');
+  const people = C.tripTabFormula_('People', 'rhine-2027');
+  assert.ok(people.startsWith("=QUERY('People'!A:"), people);
+  assert.ok(/where B = 'rhine-2027'", 1\)$/.test(people), people);
+  assert.ok(/select A, C, D,/.test(people), 'trip ID column left out: ' + people);
+  const bookings = C.tripTabFormula_('Bookings', 'mallorca-2027');
+  assert.ok(!/, R,/.test(bookings), 'link key column left out: ' + bookings);
+  assert.ok(C.tripTabFormula_('Calls', 'rhine-2027').startsWith("=QUERY('Payment requests'!A:"));
+  assert.ok(!/Evil/.test(C.tripTabFormula_('People', "x'); Evil")));
+});
+
 test('trip charity fee defaults to £50 and is checked', () => {
   const base = { name: 'Rhine', datesText: 'May', startDate: '2027-05-28', places: 50, depositPerPerson: 100, depositDays: 7 };
   assert.strictEqual(C.validateTrip_(base).value.charityFee, 50);
