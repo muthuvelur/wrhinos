@@ -27,8 +27,15 @@
     var mine = T.myBookings();
     $('mine').hidden = !mine.length;
     $('mineList').innerHTML = mine.map(function (b) {
-      return '<a class="row" href="' + esc(b.link) + '" style="justify-content:space-between;text-decoration:none;color:inherit"><span><b>' + esc(b.trip) + '</b><br><span class="small muted">' + esc(b.dates) + ' · ' + esc(b.ref) + '</span></span><span class="btn btn-line btn-small">Open</span></a>';
+      var chip = b.status === 'Cancelled' ? ' <span class="chip">Cancelled</span>' : b.status === 'Waiting list' ? ' <span class="chip warn">Waiting list</span>' : '';
+      return '<div class="row" style="justify-content:space-between;flex-wrap:nowrap"><a href="' + esc(b.link) + '" style="text-decoration:none;color:inherit;min-width:0"><b>' + esc(b.trip) + '</b>' + chip +
+        '<br><span class="small muted">' + esc(b.dates) + ' · ' + esc(b.ref) + '</span></a>' +
+        '<span class="row" style="flex:none;gap:6px"><a class="btn btn-line btn-small" href="' + esc(b.link) + '">Open</a>' +
+        '<button type="button" class="linkbtn small" data-forget="' + esc(b.ref) + '" aria-label="Remove from this list">Remove</button></span></div>';
     }).join('');
+    Array.prototype.forEach.call(document.querySelectorAll('[data-forget]'), function (btn) {
+      btn.addEventListener('click', function () { T.forgetBooking(btn.getAttribute('data-forget')); renderMine(); });
+    });
   }
 
   function loadList() {
@@ -41,8 +48,8 @@
   }
   function renderList(r) {
       renderMine();
-      $('tripList').innerHTML = r.trips.length ? r.trips.map(function (t) {
-        var p = placesText(t);
+      var list = r.trips.slice().sort(function (a, b) { return String(a.startDate || '9999').localeCompare(String(b.startDate || '9999')); });
+      $('tripList').innerHTML = list.length ? list.map(function (t) {
         return '<a class="card trip-card" href="?t=' + encodeURIComponent(t.id) + '">' +
           '<p class="eyebrow">' + esc(t.datesText) + '</p><h2>' + esc(t.name) + '</h2>' +
           '<p class="muted" style="margin:0">' + esc(t.summary) + '</p>' +

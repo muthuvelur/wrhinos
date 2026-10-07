@@ -729,6 +729,7 @@ function doPost(e) {
       case 'claim': return json_(claimPayment_(body));
       case 'update': return json_(updateBooking_(body));
       case 'resend': return json_(resendLinks_(body));
+      case 'withdraw': return json_(withdraw_(body));
       case 'admin': return json_(admin_(body));
       default: return json_({ ok: false, error: 'Unknown request.' });
     }
@@ -931,6 +932,34 @@ function updateBooking_(input) {
     delete p.responsibleAdultElsewhere;
     updateRow_('People', row._row, p);
   });
+  return bookingView_(Object.assign(nb, { _row: b._row }));
+}
+
+// "I can no longer come": the booker cancels their own booking. The record stays (marked Cancelled, with the date and
+// any reason), the places are freed, and the organisers are emailed so they can offer them to the waiting list.
+function withdraw_(input) {
+  const b = authBooking_(input);
+  if (!b) return { ok: false, error: 'This booking link is not recognised.' };
+  if (b.status === 'Cancelled') return bookingView_(b);
+  const when = Utilities.formatDate(new Date(), 'Europe/London', 'd MMM yyyy');
+  const reason = clean_(input.reason, 300);
+  const note = 'Cancelled by the booker on ' + when + (reason ? ': ' + reason : '');
+  const nb = Object.assign({}, b, { status: 'Cancelled', organiserNotes: (b.organiserNotes ? b.organiserNotes + ' | ' : '') + note, updatedAt: new Date().toISOString() });
+  updateRow_('Bookings', b._row, nb);
+  const cfg = settings_();
+  const trip = tripById_(b.tripId);
+  if (cfg.contactEmail && trip) {
+    const bookings = readTable_('Bookings');
+    const waiting = bookings.filter(function (x) { return x.tripId === trip.id && x.status === 'Waiting list'; });
+    sendMail_(cfg.contactEmail, {
+      subject: 'Cancelled: ' + b.leadName + ' (' + b.ref + ') – ' + trip.name,
+      body: [b.leadName + ' has cancelled booking ' + b.ref + ' for ' + trip.name + ' (' + b.people + (Number(b.people) === 1 ? ' person' : ' people') + ').',
+        reason ? 'Reason given: ' + reason : 'No reason given.', '',
+        'Places now left: ' + Math.max(0, Number(trip.places) - placesTaken_(bookings, trip.id)) + ' of ' + trip.places + '.',
+        waiting.length ? waiting.length + ' booking(s) on the waiting list. Offer them the places on the organiser page: wrhinos.com/organiser' : 'Nobody is on the waiting list.',
+        '', 'Any deposit paid stays with the club, as set out in the Framework.'].join('\n'),
+    });
+  }
   return bookingView_(Object.assign(nb, { _row: b._row }));
 }
 

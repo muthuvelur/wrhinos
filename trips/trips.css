@@ -195,3 +195,7 @@ table.plain td{padding:8px 10px 8px 0; border-bottom:1px solid var(--rule); vert
 }
 .grid2.keep2{grid-template-columns:1fr 1fr}
 input.invalid,select.invalid,textarea.invalid{border-color:var(--mark)!important;box-shadow:0 0 0 3px var(--bad-tint)}
+/* trip names read better in normal case; the bold capitals stay for page headings */
+.trip-name,.trip-card h2{text-transform:none; font-stretch:88%; letter-spacing:-.005em}
+.trip-name{font-size:clamp(30px,6.5vw,46px); line-height:1.05}
+.trip-card h2{font-size:24px; line-height:1.15}

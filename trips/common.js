@@ -111,9 +111,13 @@
   function rememberBooking(b) {
     try {
       var list = myBookings().filter(function (x) { return x.ref !== b.ref; });
-      list.unshift({ ref: b.ref, link: b.link, trip: b.trip, dates: b.dates || '' });
+      list.unshift({ ref: b.ref, link: b.link, trip: b.trip, dates: b.dates || '', status: b.status || '' });
       localStorage.setItem(MINE_KEY, JSON.stringify(list.slice(0, 10)));
     } catch (e) { /* storage blocked: the email still has the link */ }
+  }
+  // A booking whose link no longer works (removed by an organiser) shouldn't stay in "Your bookings".
+  function forgetBooking(ref) {
+    try { localStorage.setItem(MINE_KEY, JSON.stringify(myBookings().filter(function (x) { return x.ref !== ref; }))); } catch (e) { /* */ }
   }
 
   // ---------- person form (sign-up asks what the trip form asks; editing adds passports and own-bike details) ----------
@@ -450,6 +454,11 @@
             }
             if (body.op === 'remind') return { ok: true, emailed: 0 };
           }
+          if (body.action === 'withdraw') {
+            b = auth(db, body); if (!b) return { ok: false, error: 'This booking link is not recognised.' };
+            b.status = 'Cancelled'; b.organiserNotes = (b.organiserNotes ? b.organiserNotes + ' | ' : '') + 'Cancelled by the booker' + (body.reason ? ': ' + body.reason : '');
+            save(db); return view(db, b);
+          }
           if (body.action === 'resend') {
             if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(body.email || '').trim())) return { ok: false, error: 'Enter the email address you registered with.' };
             return { ok: true, message: 'If that email has a booking, we have sent the link to it. (Preview: no email is actually sent.)' };
@@ -472,7 +481,7 @@
 
   window.Trips = {
     DEMO: DEMO, api: api, $: $, esc: esc, money: money, today: today, niceDate: niceDate, ageOn: ageOn, waLink: waLink,
-    markdown: markdown, toast: toast, copy: copy, errorBox: errorBox, myBookings: myBookings, rememberBooking: rememberBooking,
+    markdown: markdown, toast: toast, copy: copy, errorBox: errorBox, myBookings: myBookings, rememberBooking: rememberBooking, forgetBooking: forgetBooking,
     personHtml: personHtml, readPerson: readPerson, wirePerson: wirePerson, checkPeople: checkPeople, demoBanner: demoBanner,
     ROLES: ROLES, BIKE_TYPES: BIKE_TYPES, STAGES: STAGES,
   };

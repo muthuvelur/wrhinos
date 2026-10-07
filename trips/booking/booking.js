@@ -109,7 +109,8 @@
     ].map(function (kv) { return '<dt>' + kv[0] + '</dt><dd>' + esc(kv[1]) + '</dd>'; }).join('');
     $('tripLink').href = '/trips/?t=' + encodeURIComponent(t.id || '');
 
-    T.rememberBooking({ ref: b.ref, link: location.href, trip: t.name, dates: t.datesText });
+    T.rememberBooking({ ref: b.ref, link: location.href, trip: t.name, dates: t.datesText, status: b.status });
+    $('withdrawCard').hidden = b.status === 'Cancelled';
     $('loading').hidden = true;
     $('editView').hidden = true;
     $('view').hidden = false;
@@ -117,8 +118,28 @@
 
   function load() {
     if (!/^[A-Z]{5}$/.test(auth.ref) || auth.token.length < 10) { fail('This booking link isn’t complete. Open it again from your email, or copy the whole link.'); return; }
-    call({ action: 'booking' }).then(function (r) { if (!r || !r.ok) throw new Error((r && r.error) || ''); render(r); }).catch(function (e) { fail(e.message || 'We couldn’t load your booking just now.'); });
+    call({ action: 'booking' }).then(function (r) {
+      if (r && r.ok === false && /not recognised/.test(r.error || '')) T.forgetBooking(auth.ref);
+      if (!r || !r.ok) throw new Error((r && r.error) || '');
+      render(r);
+    }).catch(function (e) { fail(e.message || 'We couldn’t load your booking just now.'); });
   }
+
+  // ---------- can't come any more ----------
+  $('withdrawBtn').addEventListener('click', function () { $('withdrawConfirm').hidden = false; $('withdrawBtn').hidden = true; });
+  $('withdrawNo').addEventListener('click', function () { $('withdrawConfirm').hidden = true; $('withdrawBtn').hidden = false; });
+  $('withdrawYes').addEventListener('click', function () {
+    var btn = this;
+    btn.disabled = true;
+    call({ action: 'withdraw', reason: $('withdrawReason').value.trim() }).then(function (r) {
+      if (!r || !r.ok) { T.errorBox($('withdrawError'), [(r && r.error) || 'That didn’t work. Please try again.']); return; }
+      $('withdrawConfirm').hidden = true;
+      render(r);
+      window.scrollTo(0, 0);
+      T.toast('Booking cancelled');
+    }).catch(function () { T.errorBox($('withdrawError'), ['That didn’t work. Check your connection and try again.']); })
+      .then(function () { btn.disabled = false; });
+  });
   function fail(msg) {
     $('loading').hidden = true;
     $('loadError').innerHTML = esc(msg) + ' <button type="button" class="linkbtn" onclick="location.reload()">Try again</button>' +

@@ -31,7 +31,7 @@
   <section id="view" class="stack" hidden>
     <div>
       <p class="eyebrow" id="bDates"></p>
-      <h1 class="page-title" id="bTrip"></h1>
+      <h1 class="page-title trip-name" id="bTrip"></h1>
       <div class="row"><span class="chip" id="bStatus"></span><span class="small muted">Booking <b id="bRef"></b> · <span id="bCount"></span></span></div>
     </div>
 
@@ -104,6 +104,18 @@
     </div>
 
     <p class="small"><a id="tripLink" href="/trips/">Read the full trip details →</a></p>
+
+    <div class="card stack" id="withdrawCard" hidden>
+      <h2 class="section-title">Can’t come any more?</h2>
+      <p class="small" style="margin:0">Plans change. Cancelling frees your places for someone on the waiting list. Everyone in this booking is cancelled; to remove just one person, ask the organiser instead.</p>
+      <button type="button" class="btn btn-line" id="withdrawBtn">I can no longer come</button>
+      <div class="stack" id="withdrawConfirm" hidden>
+        <div class="notice small"><b>Are you sure?</b> This cancels the whole booking. Any deposit you’ve paid isn’t refunded, and if we’ve already paid costs on your behalf (for example hotel rooms) you may still be asked to cover them, as set out in the club’s Framework. The organisers will be told.</div>
+        <div class="field"><label for="withdrawReason">Anything you’d like to tell the organisers? (optional)</label><input type="text" id="withdrawReason"></div>
+        <div class="error" id="withdrawError" hidden></div>
+        <div class="row"><button type="button" class="btn btn-primary" id="withdrawYes">Yes, cancel my booking</button><button type="button" class="btn btn-line" id="withdrawNo">Keep my booking</button></div>
+      </div>
+    </div>
   </section>
 
   <section id="editView" class="stack" hidden>
