@@ -68,7 +68,7 @@
       Array.prototype.forEach.call(document.querySelectorAll('#tripCards .trip-card'), function (a) {
         a.addEventListener('click', function (e) { e.preventDefault(); openTrip(a.getAttribute('data-id')); });
       });
-      if (thenId) openTrip(thenId); else views('tripsView');
+      if (thenId) openTrip(thenId); else { views('tripsView'); openPrefill(); }
     }).catch(function (e) {
       if (!e.message) return;
       $('tripCards').innerHTML = '<div class="error">' + esc(e.message) + ' <button type="button" class="linkbtn" id="retryTrips">Try again</button></div>';
@@ -116,6 +116,7 @@
     return '<form class="stack trip-form" novalidate>' +
       '<div class="card stack">' +
       '<div class="field"><label>Trip name</label><input type="text" data-f="name" value="' + v('name') + '" placeholder="e.g. Lakes &amp; Legends 2027"></div>' +
+      (t.id ? '' : '<div class="field"><label>Short web name</label><input type="text" data-f="slug" value="' + v('slug') + '" placeholder="e.g. mallorca-2027"><span class="hint">For the link you share: wrhinos.com/trips/?t=<b>mallorca-2027</b>. Small letters, numbers and dashes. Leave empty to make one from the name.</span></div>') +
       '<div class="grid2"><div class="field"><label>Status</label><select data-f="status">' + ['Draft', 'Open', 'Closed'].map(function (s) { return '<option' + (t.status === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select>' +
       '<span class="hint">Draft: only organisers see it. Open: people can register. Closed: visible, no registrations.</span></div>' +
       '<div class="field"><label>Organiser</label><input type="text" data-f="organiser" value="' + v('organiser') + '"></div></div>' +
@@ -143,7 +144,7 @@
   }
   function wireTripForm(box, t) {
     var form = box.querySelector('form');
-    var get = function (k) { return form.querySelector('[data-f="' + k + '"]').value; };
+    var get = function (k) { var el = form.querySelector('[data-f="' + k + '"]'); return el ? el.value : ''; };
     form.querySelector('.preview-btn').addEventListener('click', function () {
       var pv = form.querySelector('.preview');
       pv.innerHTML = T.markdown(get('details'));
@@ -152,7 +153,7 @@
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var trip = { id: t ? t.id : '' };
-      ['name', 'status', 'organiser', 'datesText', 'startDate', 'places', 'depositPerPerson', 'depositDays', 'charityFee', 'depositAtSignup', 'bikeOptions', 'summary', 'routes', 'details'].forEach(function (k) { trip[k] = get(k); });
+      ['name', 'status', 'organiser', 'datesText', 'startDate', 'places', 'depositPerPerson', 'depositDays', 'charityFee', 'depositAtSignup', 'bikeOptions', 'summary', 'routes', 'details', 'slug'].forEach(function (k) { trip[k] = get(k); });
       var btn = form.querySelector('[type=submit]');
       btn.disabled = true;
       admin('saveTrip', { trip: trip }).then(function (r) {
@@ -162,6 +163,27 @@
       }).catch(function () { /* */ }).then(function () { btn.disabled = false; });
     });
   }
+  // A link like /trips/organiser/?prefill=mallorca-2027 opens "New trip" already filled in from a prepared file
+  // on wrhinos.com (trips/content/<name>.json and its details .md). Used once per page load.
+  var prefillName = (new URLSearchParams(location.search).get('prefill') || '').replace(/[^a-z0-9-]/g, '');
+  function openPrefill() {
+    if (!prefillName) return;
+    var name = prefillName;
+    prefillName = '';
+    history.replaceState(null, '', location.pathname);
+    fetch('/trips/content/' + name + '.json', { cache: 'no-cache' }).then(function (r) { if (!r.ok) throw new Error(); return r.json(); }).then(function (p) {
+      if (trips.some(function (t) { return t.name === p.name; })) { T.toast('“' + p.name + '” already exists'); return; }
+      return (p.detailsFile ? fetch('/trips/content/' + p.detailsFile, { cache: 'no-cache' }).then(function (r) { return r.ok ? r.text() : ''; }) : Promise.resolve(''))
+        .then(function (md) {
+          p.details = md;
+          $('newForm').innerHTML = '<div class="notice small">Filled in from the prepared trip plan. Check everything, change what you like, then tap <b>Create trip</b>. It starts as a Draft; set it to Open when you’re ready.</div>' + tripFormHtml(p);
+          wireTripForm($('newForm'), null);
+          views('newView');
+          window.scrollTo(0, 0);
+        });
+    }).catch(function () { T.toast('Couldn’t load the prepared trip “' + name + '”'); });
+  }
+
   $('newTrip').addEventListener('click', function () {
     $('newForm').innerHTML = tripFormHtml(null);
     wireTripForm($('newForm'), null);

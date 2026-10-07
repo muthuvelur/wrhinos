@@ -154,6 +154,14 @@ function slugify_(name, existing) {
   return id;
 }
 
+// The trip's short web name, as in wrhinos.com/trips/?t=mallorca-2027. The organiser's choice if it's free,
+// otherwise the part of the name before any colon plus the year ("Capes to Calobra: ..." -> capes-to-calobra-2027).
+function newTripId_(wanted, name, startDate, existing) {
+  const w = String(wanted || '').toLowerCase().trim();
+  if (/^[a-z0-9]+(-[a-z0-9]+)*$/.test(w) && w.length >= 3 && w.length <= 40 && !existing[w]) return w;
+  return slugify_(String(name || '').split(':')[0] + ' ' + String(startDate || '').slice(0, 4), existing);
+}
+
 function generateReference_(existing, rnd) {
   rnd = rnd || Math.random;
   const pick = function (chars) { return chars.charAt(Math.floor(rnd() * chars.length)); };
@@ -954,7 +962,7 @@ function admin_(input) {
         if (t.places < taken) return { ok: false, error: taken + ' places are already booked, so places cannot go below ' + taken + '.' };
         updateRow_('Trips', old._row, Object.assign({}, old, t, { createdAt: old.createdAt, updatedAt: now }));
       } else {
-        t.id = slugify_(t.name + ' ' + t.startDate.slice(0, 4), ids);
+        t.id = newTripId_(input.trip.slug, t.name, t.startDate, ids);
         appendRows_('Trips', [Object.assign(t, { createdAt: now, updatedAt: now })]);
       }
       return { ok: true, id: t.id };
@@ -1189,6 +1197,6 @@ if (typeof module !== 'undefined') {
     buildRegistrationEmail_: buildRegistrationEmail_, buildPlaceOfferedEmail_: buildPlaceOfferedEmail_, parseSettings_: parseSettings_,
     buildCallEmail_: buildCallEmail_, buildReminderEmail_: buildReminderEmail_, buildLinksEmail_: buildLinksEmail_,
     safeCell_: safeCell_, REF_BLOCKED: REF_BLOCKED, parseBikeOptions_: parseBikeOptions_, missingDetails_: missingDetails_,
-    existingForEmail_: existingForEmail_, underLimit_: underLimit_, countEvent_: countEvent_, SIGNUP_LIMIT: SIGNUP_LIMIT,
+    newTripId_: newTripId_, existingForEmail_: existingForEmail_, underLimit_: underLimit_, countEvent_: countEvent_, SIGNUP_LIMIT: SIGNUP_LIMIT,
   };
 }

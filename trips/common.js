@@ -412,7 +412,7 @@
               if (!tr.name || !tr.startDate || !(+tr.places > 0)) return { ok: false, error: 'Fill in the name, start date and places.' };
               tr.places = +tr.places; tr.depositPerPerson = +tr.depositPerPerson; tr.depositDays = +tr.depositDays; tr.charityFee = tr.charityFee === '' ? 50 : +tr.charityFee;
               if (tr.id) { Object.assign(db.trips.filter(function (x) { return x.id === tr.id; })[0], tr); }
-              else { tr.id = (tr.name + ' ' + tr.startDate.slice(0, 4)).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40); db.trips.push(tr); }
+              else { tr.id = /^[a-z0-9]+(-[a-z0-9]+)*$/.test(tr.slug || '') && !db.trips.some(function (x) { return x.id === tr.slug; }) ? tr.slug : (tr.name.split(':')[0] + ' ' + tr.startDate.slice(0, 4)).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40); delete tr.slug; db.trips.push(tr); }
               save(db); return { ok: true, id: tr.id };
             }
             if (body.op === 'bookings') return { ok: true, bookings: db.bookings.filter(function (x) { return x.tripId === body.tripId; }).map(function (x) { return Object.assign({}, x, { link: link(x), totals: totals(db, x.ref), payments: db.payments.filter(function (p) { return p.ref === x.ref; }) }); }) };

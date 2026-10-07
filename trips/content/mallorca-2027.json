@@ -1,0 +1,17 @@
+{
+  "slug": "mallorca-2027",
+  "name": "Capes to Calobra: The Mallorca Explorer Ride",
+  "status": "Draft",
+  "organiser": "Ram Sugavanam",
+  "datesText": "Thu 29 Apr – Mon 3 May 2027",
+  "startDate": "2027-04-29",
+  "places": 60,
+  "depositPerPerson": 100,
+  "depositDays": 7,
+  "charityFee": 50,
+  "depositAtSignup": "No",
+  "summary": "Three riding days from Port de Pollença: Sa Calobra, Lluc, the Orient valley and Cap de Formentor. The \"less easy\" group, hire bikes on the island, e-bikes welcome.",
+  "bikeOptionsText": "Hire a carbon road bike (about €100–180) | hire\nHire a road e-bike (about €180–200) | hire\nHire a hybrid bike | hire\nHire a hybrid e-bike | hire\nBring my own bike | own",
+  "routesText": "Fri 30 Apr: Orient valley | \nSat 1 May: Sa Calobra | \nMon 3 May: Formentor | ",
+  "detailsFile": "mallorca-2027.md"
+}

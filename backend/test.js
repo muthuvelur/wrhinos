@@ -254,6 +254,13 @@ test('flood protection: sign-up speed limit counts within a window', () => {
   delete global.CacheService;
 });
 
+test('new trip web names: organiser choice if free, else short name plus year', () => {
+  assert.strictEqual(C.newTripId_('mallorca-2027', 'Capes to Calobra: The Mallorca Explorer Ride', '2027-04-29', {}), 'mallorca-2027');
+  assert.strictEqual(C.newTripId_('', 'Capes to Calobra: The Mallorca Explorer Ride', '2027-04-29', {}), 'capes-to-calobra-2027');
+  assert.strictEqual(C.newTripId_('rhine-2027', 'Another Rhine', '2027-05-28', { 'rhine-2027': true }), 'another-rhine-2027');
+  assert.strictEqual(C.newTripId_('Bad Name!', 'Lakes', '2027-06-01', {}), 'lakes-2027');
+});
+
 test('trip charity fee defaults to £50 and is checked', () => {
   const base = { name: 'Rhine', datesText: 'May', startDate: '2027-05-28', places: 50, depositPerPerson: 100, depositDays: 7 };
   assert.strictEqual(C.validateTrip_(base).value.charityFee, 50);
