@@ -8,7 +8,9 @@
   var filter = 'all';
 
   T.demoBanner();
-  try { pass = sessionStorage.getItem('wrhinos-org') || ''; } catch (e) { /* */ }
+  // Organisers stay signed in on their own phone or computer until they tap Lock, so the page opens instantly.
+  var store = window.localStorage;
+  try { pass = store.getItem('wrhinos-org') || sessionStorage.getItem('wrhinos-org') || ''; } catch (e) { /* */ }
 
   function admin(op, extra) {
     return T.api.post(Object.assign({ action: 'admin', op: op, pass: pass }, extra || {})).then(function (r) {
@@ -36,7 +38,7 @@
   }
   function lock(msg) {
     pass = '';
-    try { sessionStorage.removeItem('wrhinos-org'); sessionStorage.removeItem(OV_KEY); } catch (e) { /* */ }
+    try { store.removeItem('wrhinos-org'); store.removeItem(OV_KEY); sessionStorage.removeItem('wrhinos-org'); sessionStorage.removeItem(OV_KEY); } catch (e) { /* */ }
     overview = null;
     views('loginView');
     T.errorBox($('loginError'), msg ? [msg] : []);
@@ -51,7 +53,7 @@
     busy();
     fetchOverview().then(function (r) {
       if (!r.ok) { views('loginView'); T.errorBox($('loginError'), [r.error]); return; }
-      try { sessionStorage.setItem('wrhinos-org', pass); } catch (x) { /* */ }
+      try { store.setItem('wrhinos-org', pass); } catch (x) { /* */ }
       $('pass').value = '';
       showTrips(r);
     }).catch(function (e) { if (e && e.message) { views('loginView'); T.errorBox($('loginError'), [e.message]); } }).then(function () { $('loginBtn').disabled = false; });
@@ -70,6 +72,7 @@
   var overview = null;
   var OV_KEY = 'wrhinos-org-overview';
   function fetchOverview() {
+    $('syncing').hidden = false;
     return admin('overview').then(function (r) {
       // An older Google script without "overview": fall back to loading each part when needed.
       if (r && !r.ok && /Unknown organiser request/.test(r.error || '')) return admin('trips').then(function (t) { if (t.ok) { t.byTrip = {}; t.oldScript = true; } return t; });
@@ -78,10 +81,10 @@
       if (r && r.ok) {
         if (!Array.isArray(r.trips)) throw new Error('The trips didn’t load. Tap Lock, then sign in again.');
         overview = r;
-        try { sessionStorage.setItem(OV_KEY, JSON.stringify(r)); } catch (e) { /* too big or blocked: just slower */ }
+        try { store.setItem(OV_KEY, JSON.stringify(r)); } catch (e) { /* too big or blocked: just slower */ }
       }
       return r;
-    });
+    }).then(function (r) { $('syncing').hidden = true; return r; }, function (e) { $('syncing').hidden = true; throw e; });
   }
   function tripData(id) { return overview && overview.byTrip && overview.byTrip[id]; }
   function sortBookings(list) { return (list || []).slice().sort(function (a, b) { return String(a.bookedAt).localeCompare(String(b.bookedAt)); }); }
@@ -90,18 +93,25 @@
   function refreshAll(keepRef) {
     return fetchOverview().then(function (r) {
       if (!r.ok) { T.toast(r.error); return; }
-      trips = r.trips;
-      renderTripCards();
-      if (current) {
-        current = trips.filter(function (t) { return t.id === current.id; })[0] || current;
-        var d = tripData(current.id);
-        if (d) { bookings = sortBookings(d.bookings); mon = Object.assign({ ok: true }, d.money); }
-        renderBookings();
-        if (mon && !$('expensesTab').hidden) renderExpenses();
-        if (mon && !$('moneyTab').hidden) renderMoney();
-        if (keepRef) { var el = document.querySelector('details[data-ref="' + keepRef + '"]'); if (el) el.open = true; }
-      }
+      redraw(r, keepRef);
     });
+  }
+  // quiet: fresh data arrived in the background, so don't redraw anything the organiser may be working in.
+  function redraw(r, keepRef, quiet) {
+    trips = r.trips;
+    renderTripCards();
+    if (!current) return;
+    current = trips.filter(function (t) { return t.id === current.id; })[0] || current;
+    var d = tripData(current.id);
+    if (d) { bookings = sortBookings(d.bookings); mon = Object.assign({ ok: true }, d.money); }
+    if (quiet) {
+      if (!$('bookingsTab').hidden && !document.querySelector('#tripView details[open]')) renderBookings();
+      return;
+    }
+    renderBookings();
+    if (mon && !$('expensesTab').hidden) renderExpenses();
+    if (mon && !$('moneyTab').hidden) renderMoney();
+    if (keepRef) { var el = document.querySelector('details[data-ref="' + keepRef + '"]'); if (el) el.open = true; }
   }
 
   // ---------- trips ----------
@@ -115,7 +125,7 @@
     if (overview) showTrips(overview, thenId); else busy();
     return fetchOverview().then(function (r) {
       if (!r.ok) throw new Error(r.error);
-      if (thenId || !overview || $('tripView').hidden) showTrips(r, thenId); else renderTripCards();
+      if (thenId || $('tripView').hidden) showTrips(r, thenId); else redraw(r, null, true);
     }).catch(function (e) {
       if (!e.message) return;
       $('tripCards').innerHTML = '<div class="error">' + esc(e.message) + ' <button type="button" class="linkbtn" id="retryTrips">Try again</button></div>';
@@ -861,8 +871,8 @@
   });
 
   if (pass) {
-    // Same browser tab as before: show what was loaded last time straight away, then refresh quietly.
-    try { overview = JSON.parse(sessionStorage.getItem(OV_KEY) || 'null'); } catch (e) { overview = null; }
+    // Signed in before on this device: show what was loaded last time straight away, then refresh quietly.
+    try { overview = JSON.parse(store.getItem(OV_KEY) || 'null'); } catch (e) { overview = null; }
     loadTrips();
   } else {
     views('loginView');
