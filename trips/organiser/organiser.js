@@ -322,7 +322,9 @@
   function personCard(b, p) {
     var age = T.ageOn(p.dob, current.startDate);
     var hire = p.bikeHire === 'Yes' ? [p.heightCm && 'height ' + p.heightCm, p.insideLegCm && 'leg ' + p.insideLegCm, p.frameSize && 'frame ' + p.frameSize, p.saddleHeightCm && 'saddle ' + p.saddleHeightCm, p.pedals].filter(Boolean).join(', ') : '';
-    return '<div class="person-card"><div class="person-head"><b>' + esc(p.fullName) + '</b><span class="chip">' + esc(p.role) + (age === null ? '' : ' · ' + age) + '</span></div>' +
+    return '<div class="person-card"><div class="person-head"><b>' + esc(p.fullName) + '</b><span class="chip">' + esc(p.role) + (age === null ? '' : ' · age ' + age) + '</span></div>' +
+      (age !== null && age < 18 ? '<div class="notice small">Under 18 on the trip (born ' + esc(T.niceDate(p.dob)) + '). If that’s a mistake, ask them to correct their date of birth on their booking page.</div>' : '') +
+      (age === null ? '<div class="notice small">No date of birth given.</div>' : '') +
       '<dl class="kv">' +
       (p.under18 === 'Yes' ? kv('With', esc(p.responsibleAdult)) : '') +
       kv('Bike', esc([p.bikeChoice || p.bikeType, p.bikeMake, p.bikeColour].filter(Boolean).join(', ')) + (hire ? '<br><span class="small muted">' + esc(hire) + '</span>' : '')) +
