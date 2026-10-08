@@ -499,6 +499,21 @@
           if (body.action === 'admin') {
             if (body.pass !== PASS) return { ok: false, auth: false, error: 'Wrong passcode. In this preview the passcode is: ' + PASS };
             if (body.op === 'login') return { ok: true, problems: ['Preview mode: the Google Sheet is not connected yet, so nothing here is real or shared.'] };
+            if (body.op === 'overview') {
+              var ovTrips = db.trips.map(function (x) { return Object.assign(pub(db, x), { routesText: x.routes, claimed: db.payments.filter(function (p) { return p.tripId === x.id && p.status === 'Claimed'; }).length,
+                depositAsked: x.depositAtSignup === 'Yes' || db.calls.some(function (c) { return c.tripId === x.id && c.stage === 'Deposit'; }) }); });
+              var byTrip = {};
+              db.trips.forEach(function (tt) {
+                var liveRefs = {}; db.bookings.forEach(function (x) { if (x.tripId === tt.id && x.status === 'Booked') liveRefs[x.ref] = 1; });
+                byTrip[tt.id] = {
+                  bookings: db.bookings.filter(function (x) { return x.tripId === tt.id; }).map(function (x) { return Object.assign({}, x, { link: link(x), totals: totals(db, x.ref), payments: db.payments.filter(function (p) { return p.ref === x.ref; }) }); }),
+                  money: { result: tripMoney(db, tt), bank: bank, expenses: db.expenses.filter(function (e) { return e.tripId === tt.id; }), calls: db.calls.filter(function (c) { return c.tripId === tt.id; }),
+                    people: flatPeople(db, tt.id).filter(function (p) { return liveRefs[p.ref]; }).map(function (p) { return { key: window.Money.personKey(p.ref, p.n), ref: p.ref, n: p.n, name: p.fullName, role: p.role, bikeType: p.bikeType, bikeHire: p.bikeHire, under18: p.under18 }; }),
+                    bookings: db.bookings.filter(function (x) { return x.tripId === tt.id; }).map(function (x) { return { ref: x.ref, status: x.status, leadName: x.leadName, email: x.email, mobile: x.mobile, link: link(x) }; }) },
+                };
+              });
+              return { ok: true, problems: [], bankProblems: [], trips: ovTrips, byTrip: byTrip };
+            }
             if (body.op === 'trips') return { ok: true, problems: [], trips: db.trips.map(function (x) { return Object.assign(pub(db, x), { routesText: x.routes, claimed: db.payments.filter(function (p) { return p.tripId === x.id && p.status === 'Claimed'; }).length,
               depositAsked: x.depositAtSignup === 'Yes' || db.calls.some(function (c) { return c.tripId === x.id && c.stage === 'Deposit'; }) }); }) };
             if (body.op === 'saveTrip') {

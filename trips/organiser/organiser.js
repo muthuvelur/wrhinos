@@ -24,7 +24,8 @@
   function busy() { $('loading').hidden = false; }
   function lock(msg) {
     pass = '';
-    try { sessionStorage.removeItem('wrhinos-org'); } catch (e) { /* */ }
+    try { sessionStorage.removeItem('wrhinos-org'); sessionStorage.removeItem(OV_KEY); } catch (e) { /* */ }
+    overview = null;
     views('loginView');
     T.errorBox($('loginError'), msg ? [msg] : []);
   }
@@ -34,14 +35,14 @@
     e.preventDefault();
     pass = $('pass').value;
     $('loginBtn').disabled = true;
-    admin('login').then(function (r) {
-      if (!r.ok) { T.errorBox($('loginError'), [r.error]); return; }
+    $('loginView').hidden = true;
+    busy();
+    fetchOverview().then(function (r) {
+      if (!r.ok) { views('loginView'); T.errorBox($('loginError'), [r.error]); return; }
       try { sessionStorage.setItem('wrhinos-org', pass); } catch (x) { /* */ }
       $('pass').value = '';
-      $('loginView').hidden = true;
-      showProblems(r.problems, r.bankProblems);
-      loadTrips();
-    }).catch(function (e) { if (e && e.message) T.errorBox($('loginError'), [e.message]); }).then(function () { $('loginBtn').disabled = false; });
+      showTrips(r);
+    }).catch(function (e) { if (e && e.message) { views('loginView'); T.errorBox($('loginError'), [e.message]); } }).then(function () { $('loginBtn').disabled = false; });
   });
   $('logout').addEventListener('click', function () { lock(''); });
   function showProblems(list, bank) {
@@ -51,14 +52,66 @@
     $('problems').innerHTML = html;
   }
 
-  // ---------- trips ----------
-  function loadTrips(thenId) {
-    busy();
-    return admin('trips').then(function (r) {
-      if (!r.ok) throw new Error(r.error);
-      if (!Array.isArray(r.trips)) throw new Error('The trips didn’t load. Tap Lock, then sign in again.');
+  // ---------- everything in one request ----------
+  // Google is slow per request, so the page fetches every trip's bookings and money at once ("overview"),
+  // keeps it for this browser tab, and opens trips and tabs from it instantly. Any change refreshes it in one go.
+  var overview = null;
+  var OV_KEY = 'wrhinos-org-overview';
+  function fetchOverview() {
+    return admin('overview').then(function (r) {
+      // An older Google script without "overview": fall back to loading each part when needed.
+      if (r && !r.ok && /Unknown organiser request/.test(r.error || '')) return admin('trips').then(function (t) { if (t.ok) t.byTrip = {}; return t; });
+      return r;
+    }).then(function (r) {
+      if (r && r.ok) {
+        if (!Array.isArray(r.trips)) throw new Error('The trips didn’t load. Tap Lock, then sign in again.');
+        overview = r;
+        try { sessionStorage.setItem(OV_KEY, JSON.stringify(r)); } catch (e) { /* too big or blocked: just slower */ }
+      }
+      return r;
+    });
+  }
+  function tripData(id) { return overview && overview.byTrip && overview.byTrip[id]; }
+  function sortBookings(list) { return (list || []).slice().sort(function (a, b) { return String(a.bookedAt).localeCompare(String(b.bookedAt)); }); }
+
+  // Refresh after a change: one request, then redraw whatever is open.
+  function refreshAll(keepRef) {
+    return fetchOverview().then(function (r) {
+      if (!r.ok) { T.toast(r.error); return; }
       trips = r.trips;
-      if (r.problems) showProblems(r.problems, r.bankProblems);
+      renderTripCards();
+      if (current) {
+        current = trips.filter(function (t) { return t.id === current.id; })[0] || current;
+        var d = tripData(current.id);
+        if (d) { bookings = sortBookings(d.bookings); mon = Object.assign({ ok: true }, d.money); }
+        renderBookings();
+        if (mon && !$('expensesTab').hidden) renderExpenses();
+        if (mon && !$('moneyTab').hidden) renderMoney();
+        if (keepRef) { var el = document.querySelector('details[data-ref="' + keepRef + '"]'); if (el) el.open = true; }
+      }
+    });
+  }
+
+  // ---------- trips ----------
+  function showTrips(r, thenId) {
+    trips = r.trips;
+    showProblems(r.problems, r.bankProblems);
+    renderTripCards();
+    if (thenId) openTrip(thenId); else { views('tripsView'); openPrefill(); }
+  }
+  function loadTrips(thenId) {
+    if (overview) showTrips(overview, thenId); else busy();
+    return fetchOverview().then(function (r) {
+      if (!r.ok) throw new Error(r.error);
+      if (thenId || !overview || $('tripView').hidden) showTrips(r, thenId); else renderTripCards();
+    }).catch(function (e) {
+      if (!e.message) return;
+      $('tripCards').innerHTML = '<div class="error">' + esc(e.message) + ' <button type="button" class="linkbtn" id="retryTrips">Try again</button></div>';
+      $('retryTrips').addEventListener('click', function () { loadTrips(); });
+      views('tripsView');
+    });
+  }
+  function renderTripCards() {
       $('tripCards').innerHTML = trips.length ? trips.map(function (t) {
         return '<a href="#" class="card trip-card" data-id="' + esc(t.id) + '"><p class="eyebrow">' + esc(t.datesText) + '</p><h2>' + esc(t.name) + '</h2>' +
           '<div class="row"><span class="chip ' + (t.status === 'Open' ? 'ok' : t.status === 'Draft' ? 'warn' : '') + '">' + esc(t.status) + '</span>' +
@@ -68,15 +121,8 @@
       Array.prototype.forEach.call(document.querySelectorAll('#tripCards .trip-card'), function (a) {
         a.addEventListener('click', function (e) { e.preventDefault(); openTrip(a.getAttribute('data-id')); });
       });
-      if (thenId) openTrip(thenId); else { views('tripsView'); openPrefill(); }
-    }).catch(function (e) {
-      if (!e.message) return;
-      $('tripCards').innerHTML = '<div class="error">' + esc(e.message) + ' <button type="button" class="linkbtn" id="retryTrips">Try again</button></div>';
-      $('retryTrips').addEventListener('click', function () { loadTrips(); });
-      views('tripsView');
-    });
   }
-  $('backTrips').addEventListener('click', function (e) { e.preventDefault(); loadTrips(); });
+  $('backTrips').addEventListener('click', function (e) { e.preventDefault(); current = null; views('tripsView'); });
   $('backNew').addEventListener('click', function (e) { e.preventDefault(); views('tripsView'); });
 
   function openTrip(id) {
@@ -96,7 +142,13 @@
     setTab('bookings');
     $('editTab').innerHTML = tripFormHtml(current);
     wireTripForm($('editTab'), current);
-    loadBookings();
+    var d = tripData(id);
+    if (d) {
+      bookings = sortBookings(d.bookings);
+      mon = Object.assign({ ok: true }, d.money);
+      renderBookings();
+      views('tripView');
+    } else loadBookings();
   }
 
   function setTab(name) {
@@ -305,9 +357,10 @@
     });
   }
   function reload(keepRef) {
+    if (overview && overview.byTrip && tripData(current.id)) return refreshAll(keepRef);
     return admin('bookings', { tripId: current.id }).then(function (r) {
       if (!r.ok) return;
-      bookings = r.bookings.sort(function (a, b) { return String(a.bookedAt).localeCompare(String(b.bookedAt)); });
+      bookings = sortBookings(r.bookings);
       return admin('trips').then(function (tr) {
         if (tr.ok) { trips = tr.trips; current = trips.filter(function (t) { return t.id === current.id; })[0] || current; }
         renderBookings();
@@ -389,8 +442,12 @@
   var ROOM_TYPES = ['Single', 'Double', 'Twin', 'Triple', 'Family / quad', 'Other'];
   var SPLIT_LABELS = { equal: 'Everyone', select: 'Some people', rooms: 'Rooms', custom: 'Set amounts' };
 
-  function loadMoney() {
+  // Opening a tab uses what's already loaded; after a change (fresh), everything is refreshed in one request.
+  function loadMoney(fresh) {
     if (!current) return Promise.resolve();
+    var d = tripData(current.id);
+    if (d && !fresh) { mon = Object.assign({ ok: true }, d.money); renderExpenses(); renderMoney(); return Promise.resolve(); }
+    if (d) return refreshAll().then(function () { if (mon) { renderExpenses(); renderMoney(); } });
     return admin('money', { tripId: current.id }).then(function (r) {
       if (!r.ok) { T.toast(r.error); return; }
       mon = r;
@@ -566,7 +623,7 @@
     if ($('exDelete')) $('exDelete').addEventListener('click', function () {
       var b = this;
       if (b.getAttribute('data-sure') !== '1') { b.setAttribute('data-sure', '1'); b.textContent = 'Tap again to delete'; return; }
-      admin('deleteExpense', { id: draft.id }).then(function (r) { if (!r.ok) { T.toast(r.error); return; } T.toast('Expense deleted'); closeEditor(); loadMoney(); });
+      admin('deleteExpense', { id: draft.id }).then(function (r) { if (!r.ok) { T.toast(r.error); return; } T.toast('Expense deleted'); closeEditor(); loadMoney(true); });
     });
     $('exForm').addEventListener('submit', function (e) {
       e.preventDefault();
@@ -580,7 +637,7 @@
         if (!r.ok) { T.errorBox($('exError'), [r.error]); return; }
         T.toast(draft.id ? 'Expense saved' : 'Expense added');
         closeEditor();
-        return loadMoney();
+        return loadMoney(true);
       }).catch(function () { /* */ }).then(function () { btn.disabled = false; });
     });
     wireBody();
@@ -787,12 +844,14 @@
       if (stage === 'Deposit') current.depositAsked = true;
       T.toast((stage === 'Deposit' ? 'Deposits asked for' : stage === 'Final' ? 'Final balance called' : 'Interim payment called') +
         (how === 'email' ? (T.DEMO ? ' (preview: no emails sent)' : ', ' + r.emailed + ' emails sent') : ''));
-      return loadMoney().then(function () { if (how === 'group') showGroupMessage(groupMessage(body)); });
+      return loadMoney(true).then(function () { if (how === 'group') showGroupMessage(groupMessage(body)); });
     }).catch(function () { /* */ }).then(function () { btn.disabled = false; });
   });
 
   if (pass) {
-    admin('login').then(function (r) { if (r.ok) { showProblems(r.problems, r.bankProblems); loadTrips(); } }).catch(function () { /* */ });
+    // Same browser tab as before: show what was loaded last time straight away, then refresh quietly.
+    try { overview = JSON.parse(sessionStorage.getItem(OV_KEY) || 'null'); } catch (e) { overview = null; }
+    loadTrips();
   } else {
     views('loginView');
   }

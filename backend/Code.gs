@@ -620,13 +620,63 @@ function makeTripTabs_(trip) {
 }
 
 // Everything money for one trip, worked out by Money.gs (the same code the website uses).
-function tripMoney_(trip) {
+// Pass `all` (every table, already read) to avoid reading the Sheet again for each trip.
+function tripMoney_(trip, all) {
   const id = trip.id;
-  const of = function (name) { return readTable_(name).filter(function (x) { return x.tripId === id; }); };
+  const of = function (name) { return (all ? all[name] : readTable_(name)).filter(function (x) { return x.tripId === id; }); };
   const bookings = of('Bookings'), people = of('People'), payments = of('Payments'), expenses = of('Expenses'), calls = of('Calls');
   const t = { charityFee: trip.charityFee === '' || trip.charityFee === undefined ? 50 : Number(trip.charityFee), depositAtSignup: trip.depositAtSignup === 'Yes' ? 'Yes' : 'No' };
   return { bookings: bookings, people: people, payments: payments, expenses: expenses, calls: calls,
     result: Money.balances(t, bookings, people, payments, expenses, calls) };
+}
+
+// ---------- organiser data (built from tables read once) ----------
+function readAll_() {
+  const all = {};
+  ['Trips', 'Bookings', 'People', 'Payments', 'Expenses', 'Calls'].forEach(function (n) { all[n] = readTable_(n); });
+  return all;
+}
+function clean0_(r) { const q = Object.assign({}, r); delete q._row; return q; }
+
+function orgTrips_(all) {
+  return all.Trips.map(function (t) {
+    const x = publicTrip_(t, all.Bookings);
+    x.routesText = t.routes;
+    x.claimed = all.Payments.filter(function (p) { return p.tripId === t.id && p.status === 'Claimed'; }).length;
+    x.depositAsked = t.depositAtSignup === 'Yes' || all.Calls.some(function (c) { return c.tripId === t.id && c.stage === 'Deposit'; });
+    return x;
+  });
+}
+
+function orgBookings_(tripId, all, cfg) {
+  const people = all.People.filter(function (p) { return p.tripId === tripId; });
+  const payments = all.Payments.filter(function (p) { return p.tripId === tripId; });
+  return all.Bookings.filter(function (b) { return b.tripId === tripId; }).map(function (b) {
+    const o = clean0_(b);
+    o.link = bookingLink_(cfg.siteUrl, b.ref, b.token);
+    delete o.token;
+    o.people = Number(b.people);
+    o.depositDue = Number(b.depositDue);
+    o.totals = paymentTotals_(payments, b.ref);
+    o.persons = people.filter(function (p) { return p.ref === b.ref; }).sort(function (x, y) { return Number(x.n) - Number(y.n); }).map(clean0_);
+    o.payments = payments.filter(function (p) { return p.ref === b.ref; }).map(clean0_);
+    return o;
+  });
+}
+
+function orgMoney_(trip, all, cfg) {
+  const m = tripMoney_(trip, all);
+  const live = {};
+  m.bookings.forEach(function (b) { if (b.status === 'Booked') live[b.ref] = b; });
+  return {
+    result: m.result, bank: bank_(cfg),
+    expenses: m.expenses.map(function (e) { return { id: e.id, name: e.name, split: e.split, amount: Number(e.amount), detail: Money.parseDetail(e.detail), date: e.date, paidBy: e.paidBy, notes: e.notes }; }),
+    calls: m.calls.map(function (c) { return { id: c.id, stage: c.stage, reason: c.reason, perPerson: Number(c.perPerson) || 0, dueDate: c.dueDate, createdAt: c.createdAt, emailed: c.emailed }; }),
+    people: m.people.filter(function (p) { return live[p.ref]; }).map(function (p) {
+      return { key: Money.personKey(p.ref, p.n), ref: p.ref, n: Number(p.n), name: p.fullName, role: p.role, bikeType: p.bikeType, bikeHire: p.bikeHire, under18: p.under18 };
+    }),
+    bookings: m.bookings.map(function (b) { return { ref: b.ref, status: b.status, leadName: b.leadName, email: b.email, mobile: b.mobile, link: bookingLink_(cfg.siteUrl, b.ref, b.token) }; }),
+  };
 }
 
 function readTable_(name) {
@@ -1087,20 +1137,13 @@ function admin_(input) {
   const cfg = settings_();
   switch (input.op) {
     case 'login': return { ok: true, problems: cfg.problems, bankProblems: cfg.bankProblems };
-    case 'trips': {
-      const bookings = readTable_('Bookings');
-      const payments = readTable_('Payments');
-      const calls = readTable_('Calls');
-      return {
-        ok: true, problems: cfg.problems, bankProblems: cfg.bankProblems,
-        trips: readTable_('Trips').map(function (t) {
-          const x = publicTrip_(t, bookings);
-          x.routesText = t.routes;
-          x.claimed = payments.filter(function (p) { return p.tripId === t.id && p.status === 'Claimed'; }).length;
-          x.depositAsked = t.depositAtSignup === 'Yes' || calls.some(function (c) { return c.tripId === t.id && c.stage === 'Deposit'; });
-          return x;
-        }),
-      };
+    case 'trips': return Object.assign({ ok: true, problems: cfg.problems, bankProblems: cfg.bankProblems }, { trips: orgTrips_(readAll_()) });
+    // Everything the organiser page shows, for every trip, in one request: Google is slow per request, not per row.
+    case 'overview': {
+      const all = readAll_();
+      const byTrip = {};
+      all.Trips.forEach(function (t) { byTrip[t.id] = { bookings: orgBookings_(t.id, all, cfg), money: orgMoney_(t, all, cfg) }; });
+      return { ok: true, problems: cfg.problems, bankProblems: cfg.bankProblems, trips: orgTrips_(all), byTrip: byTrip };
     }
     case 'saveTrip': {
       const trips = readTable_('Trips');
@@ -1122,25 +1165,7 @@ function admin_(input) {
       }
       return { ok: true, id: t.id };
     }
-    case 'bookings': {
-      const tripId = String(input.tripId || '');
-      const people = readTable_('People').filter(function (p) { return p.tripId === tripId; });
-      const payments = readTable_('Payments').filter(function (p) { return p.tripId === tripId; });
-      const bookings = readTable_('Bookings').filter(function (b) { return b.tripId === tripId; }).map(function (b) {
-        const o = Object.assign({}, b);
-        delete o._row;
-        o.link = bookingLink_(cfg.siteUrl, b.ref, b.token);
-        delete o.token;
-        o.people = Number(b.people);
-        o.depositDue = Number(b.depositDue);
-        o.totals = paymentTotals_(payments, b.ref);
-        o.persons = people.filter(function (p) { return p.ref === b.ref; }).sort(function (x, y) { return Number(x.n) - Number(y.n); })
-          .map(function (p) { const q = Object.assign({}, p); delete q._row; return q; });
-        o.payments = payments.filter(function (p) { return p.ref === b.ref; }).map(function (p) { const q = Object.assign({}, p); delete q._row; return q; });
-        return o;
-      });
-      return { ok: true, bookings: bookings };
-    }
+    case 'bookings': return { ok: true, bookings: orgBookings_(String(input.tripId || ''), readAll_(), cfg) };
     case 'payment': {
       const pay = readTable_('Payments').filter(function (p) { return p.id === input.id; })[0];
       if (!pay) return { ok: false, error: 'Payment not found. Reload the page.' };
@@ -1203,20 +1228,10 @@ function admin_(input) {
       return r.ok ? { ok: true } : r;
     }
     case 'money': {
-      const trip = tripById_(String(input.tripId || ''));
+      const all = readAll_();
+      const trip = all.Trips.filter(function (t) { return t.id === String(input.tripId || ''); })[0];
       if (!trip) return { ok: false, error: 'Trip not found.' };
-      const m = tripMoney_(trip);
-      const live = {};
-      m.bookings.forEach(function (b) { if (b.status === 'Booked') live[b.ref] = b; });
-      return {
-        ok: true, result: m.result, bank: bank_(cfg),
-        expenses: m.expenses.map(function (e) { return { id: e.id, name: e.name, split: e.split, amount: Number(e.amount), detail: Money.parseDetail(e.detail), date: e.date, paidBy: e.paidBy, notes: e.notes }; }),
-        calls: m.calls.map(function (c) { return { id: c.id, stage: c.stage, reason: c.reason, perPerson: Number(c.perPerson) || 0, dueDate: c.dueDate, createdAt: c.createdAt, emailed: c.emailed }; }),
-        people: m.people.filter(function (p) { return live[p.ref]; }).map(function (p) {
-          return { key: Money.personKey(p.ref, p.n), ref: p.ref, n: Number(p.n), name: p.fullName, role: p.role, bikeType: p.bikeType, bikeHire: p.bikeHire, under18: p.under18 };
-        }),
-        bookings: m.bookings.map(function (b) { return { ref: b.ref, status: b.status, leadName: b.leadName, email: b.email, mobile: b.mobile, link: bookingLink_(cfg.siteUrl, b.ref, b.token) }; }),
-      };
+      return Object.assign({ ok: true }, orgMoney_(trip, all, cfg));
     }
     case 'saveExpense': {
       const trip = tripById_(String(input.tripId || ''));
