@@ -19,9 +19,21 @@
   function views(id) {
     ['loginView', 'tripsView', 'tripView', 'newView'].forEach(function (v) { $(v).hidden = v !== id; });
     $('loading').hidden = true;
+    clearTimeout(slowTimer);
     $('logout').hidden = id === 'loginView';
   }
-  function busy() { $('loading').hidden = false; }
+  // While Google is working, keep Lock available and offer a way out if it is very slow.
+  var slowTimer = null;
+  function busy() {
+    $('loading').hidden = false;
+    $('logout').hidden = !pass;
+    $('loadingMsg').textContent = 'Loading… this can take up to a minute when Google is slow.';
+    clearTimeout(slowTimer);
+    slowTimer = setTimeout(function () {
+      $('loadingMsg').innerHTML = 'Google is being slow. Still trying… <button type="button" class="linkbtn" id="loadingRetry">Start again</button>';
+      $('loadingRetry').addEventListener('click', function () { location.reload(); });
+    }, 45000);
+  }
   function lock(msg) {
     pass = '';
     try { sessionStorage.removeItem('wrhinos-org'); sessionStorage.removeItem(OV_KEY); } catch (e) { /* */ }
