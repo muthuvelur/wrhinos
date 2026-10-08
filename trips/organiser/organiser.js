@@ -45,8 +45,8 @@
     }).catch(function (e) { if (e && e.message) { views('loginView'); T.errorBox($('loginError'), [e.message]); } }).then(function () { $('loginBtn').disabled = false; });
   });
   $('logout').addEventListener('click', function () { lock(''); });
-  function showProblems(list, bank) {
-    var html = list && list.length ? '<b>Registrations can’t open until these are fixed in the Settings tab of the Google Sheet:</b><ul>' + list.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ul>'
+  function showProblems(list, bank, oldScript) {
+    var html = oldScript ? '<b>The Google script is an older version</b>, so each trip loads slowly. Paste the latest Code.gs and deploy a new version.' : list && list.length ? '<b>Registrations can’t open until these are fixed in the Settings tab of the Google Sheet:</b><ul>' + list.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ul>'
       : bank && bank.length ? '<b>Bank details not added yet.</b> Sign-ups work without them. Add them in the Settings tab of the Google Sheet before you tap “Ask for deposits and details”.' : '';
     $('problems').hidden = !html;
     $('problems').innerHTML = html;
@@ -60,7 +60,7 @@
   function fetchOverview() {
     return admin('overview').then(function (r) {
       // An older Google script without "overview": fall back to loading each part when needed.
-      if (r && !r.ok && /Unknown organiser request/.test(r.error || '')) return admin('trips').then(function (t) { if (t.ok) t.byTrip = {}; return t; });
+      if (r && !r.ok && /Unknown organiser request/.test(r.error || '')) return admin('trips').then(function (t) { if (t.ok) { t.byTrip = {}; t.oldScript = true; } return t; });
       return r;
     }).then(function (r) {
       if (r && r.ok) {
@@ -95,7 +95,7 @@
   // ---------- trips ----------
   function showTrips(r, thenId) {
     trips = r.trips;
-    showProblems(r.problems, r.bankProblems);
+    showProblems(r.problems, r.bankProblems, r.oldScript);
     renderTripCards();
     if (thenId) openTrip(thenId); else { views('tripsView'); openPrefill(); }
   }
