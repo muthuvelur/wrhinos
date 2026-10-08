@@ -316,6 +316,22 @@
   }
   $('search').addEventListener('input', function () { renderBookings(); });
 
+  // Phone-friendly blocks: one card per person, labels on the left, nothing that needs sideways scrolling.
+  function kv(label, html) { return '<dt>' + label + '</dt><dd>' + (html || '<span class="muted">Not given</span>') + '</dd>'; }
+  function tel(n) { return n ? '<a href="tel:' + esc(String(n).replace(/[^0-9+]/g, '')) + '">' + esc(n) + '</a>' : ''; }
+  function personCard(b, p) {
+    var age = T.ageOn(p.dob, current.startDate);
+    var hire = p.bikeHire === 'Yes' ? [p.heightCm && 'height ' + p.heightCm, p.insideLegCm && 'leg ' + p.insideLegCm, p.frameSize && 'frame ' + p.frameSize, p.saddleHeightCm && 'saddle ' + p.saddleHeightCm, p.pedals].filter(Boolean).join(', ') : '';
+    return '<div class="person-card"><div class="person-head"><b>' + esc(p.fullName) + '</b><span class="chip">' + esc(p.role) + (age === null ? '' : ' · ' + age) + '</span></div>' +
+      '<dl class="kv">' +
+      (p.under18 === 'Yes' ? kv('With', esc(p.responsibleAdult)) : '') +
+      kv('Bike', esc([p.bikeChoice || p.bikeType, p.bikeMake, p.bikeColour].filter(Boolean).join(', ')) + (hire ? '<br><span class="small muted">' + esc(hire) + '</span>' : '')) +
+      kv('Diet', esc(p.dietary)) + kv('Phone', tel(p.mobile)) +
+      kv('Passport', p.passportNumber ? esc(p.passportNumber) + ' <span class="small muted">' + esc(p.passportCountry) + ' · expires ' + esc(T.niceDate(p.passportExpiry)) + '</span>' : '<span class="chip warn">Missing</span>') +
+      (p.safetyInfo ? kv('Safety', esc(p.safetyInfo)) : '') + '</dl>' +
+      ((b.persons || []).length > 1 && b.status !== 'Cancelled' ? '<button type="button" class="linkbtn small" data-act="rmperson" data-n="' + esc(p.n) + '" data-name="' + esc(p.fullName) + '">Remove ' + esc(String(p.fullName).split(' ')[0]) + ' from this booking</button>' : '') +
+      '</div>';
+  }
   function bookingHtml(b) {
     var claimed = b.payments.filter(function (p) { return p.status === 'Claimed'; });
     var left = owes(b);
@@ -335,20 +351,12 @@
           '<span class="row"><button type="button" class="btn btn-ok btn-small" data-act="confirm" data-id="' + esc(p.id) + '">In the bank ✓</button>' +
           '<button type="button" class="btn btn-line btn-small" data-act="reject" data-id="' + esc(p.id) + '">Not found</button></span></div>';
       }).join('') + '</div>' : '') +
-      '<div class="table-wrap"><table class="plain"><thead><tr><th>Name</th><th>Going as</th><th>Age</th><th>Bike</th><th>Diet</th><th>Phone</th><th>Passport</th><th></th></tr></thead><tbody>' +
-      (b.persons || []).map(function (p) {
-        var age = T.ageOn(p.dob, current.startDate);
-        return '<tr><td>' + esc(p.fullName) + (p.under18 === 'Yes' ? '<br><span class="small muted">with ' + esc(p.responsibleAdult) + '</span>' : '') + '</td><td>' + esc(p.role) + '</td><td>' + (age === null ? '' : age) + '</td>' +
-          '<td>' + esc([p.bikeChoice || p.bikeType, p.bikeMake, p.bikeColour].filter(Boolean).join(', ')) +
-          (p.bikeHire === 'Yes' ? '<br><span class="small muted">' + esc([p.heightCm && 'height ' + p.heightCm, p.insideLegCm && 'leg ' + p.insideLegCm, p.frameSize && 'frame ' + p.frameSize, p.saddleHeightCm && 'saddle ' + p.saddleHeightCm, p.pedals].filter(Boolean).join(', ')) + '</span>' : '') +
-          '</td><td>' + esc(p.dietary) + '</td><td>' + esc(p.mobile) + '</td>' +
-          '<td>' + (p.passportNumber ? esc(p.passportNumber) + '<br><span class="small muted">' + esc(p.passportCountry) + ' ' + esc(T.niceDate(p.passportExpiry)) + '</span>' : '<span class="chip warn">Missing</span>') + '</td>' +
-          '<td>' + ((b.persons || []).length > 1 && b.status !== 'Cancelled' ? '<button type="button" class="linkbtn small" data-act="rmperson" data-n="' + esc(p.n) + '" data-name="' + esc(p.fullName) + '">Remove</button>' : '') + '</td></tr>' +
-          (p.safetyInfo ? '<tr><td colspan="8" class="small"><b>Safety:</b> ' + esc(p.safetyInfo) + '</td></tr>' : '');
-      }).join('') + '</tbody></table></div>' +
-      '<dl class="kv"><dt>Email</dt><dd>' + esc(b.email) + '</dd><dt>Mobile</dt><dd>' + esc(b.mobile) + '</dd><dt>Address</dt><dd>' + esc(b.address) + ', ' + esc(b.postcode) + '</dd>' +
-      '<dt>Emergency</dt><dd>' + esc(b.emergencyName) + ' (' + esc(b.emergencyRelation) + ') ' + esc(b.emergencyMobile) + '</dd>' +
-      '<dt>Room</dt><dd>' + esc([b.roomType, b.roomRequests ? 'share with ' + b.roomRequests : ''].filter(Boolean).join(', ') || '—') + '</dd><dt>Notes</dt><dd>' + esc(b.notes || '—') + '</dd></dl>' +
+      '<div class="people-list">' + (b.persons || []).map(function (p) { return personCard(b, p); }).join('') + '</div>' +
+      '<h4 class="sub">Contact</h4>' +
+      '<dl class="kv">' + kv('Email', b.email ? '<a href="mailto:' + esc(b.email) + '">' + esc(b.email) + '</a>' : '') + kv('Mobile', tel(b.mobile)) +
+      kv('Address', esc([b.address, b.postcode].filter(Boolean).join(', '))) +
+      kv('Emergency', [esc(b.emergencyName), b.emergencyRelation ? '<span class="muted">(' + esc(b.emergencyRelation) + ')</span>' : '', tel(b.emergencyMobile)].filter(Boolean).join(' ')) +
+      kv('Room', esc([b.roomType, b.roomRequests ? 'share with ' + b.roomRequests : ''].filter(Boolean).join(', '))) + kv('Notes', esc(b.notes)) + '</dl>' +
       (b.payments.length ? '<div class="table-wrap"><table class="plain"><thead><tr><th>Paid on</th><th>For</th><th>Amount</th><th>Status</th></tr></thead><tbody>' +
         b.payments.map(function (p) { return '<tr><td>' + esc(T.niceDate(p.paidOn)) + '</td><td>' + esc(p.stage) + '</td><td>' + T.money(p.amount) + '</td><td>' + esc(p.status) + (p.source === 'Organiser' ? ' (added by organiser)' : '') + '</td></tr>'; }).join('') +
         '</tbody></table></div>' : '') +

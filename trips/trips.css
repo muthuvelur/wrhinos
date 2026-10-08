@@ -207,3 +207,13 @@ label.req::after,legend.req::after{content:" *"; color:var(--mark); font-weight:
 /* date of birth / expiry as three dropdowns */
 .date3{display:grid; grid-template-columns:minmax(0,.8fr) minmax(0,1.5fr) minmax(0,1fr); gap:8px}
 .date3 select{padding-inline:10px}
+
+/* Organiser booking: one card per person, easy to read on a phone */
+.people-list{display:flex; flex-direction:column; gap:10px}
+.person-card{border:1px solid var(--rule); border-radius:10px; padding:12px 14px; display:flex; flex-direction:column; gap:8px}
+.person-head{display:flex; justify-content:space-between; align-items:flex-start; gap:10px}
+.person-head b{font-size:16px}
+.person-card .kv{grid-template-columns:5.5em 1fr}
+.person-card .linkbtn{align-self:flex-start}
+h4.sub{margin:4px 0 -6px; font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
+.booking .kv a{color:inherit}
