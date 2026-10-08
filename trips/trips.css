@@ -199,3 +199,11 @@ input.invalid,select.invalid,textarea.invalid{border-color:var(--mark)!important
 .trip-name,.trip-card h2{text-transform:none; font-stretch:88%; letter-spacing:-.005em}
 .trip-name{font-size:clamp(30px,6.5vw,46px); line-height:1.05}
 .trip-card h2{font-size:24px; line-height:1.15}
+/* required fields */
+label.req::after,legend.req::after{content:" *"; color:var(--mark); font-weight:700}
+.req-star{color:var(--mark); font-weight:700}
+.req-msg{color:var(--mark); font-size:13px; font-weight:600}
+.invalid-group legend{color:var(--mark)}
+/* date of birth / expiry as three dropdowns */
+.date3{display:grid; grid-template-columns:minmax(0,.8fr) minmax(0,1.5fr) minmax(0,1fr); gap:8px}
+.date3 select{padding-inline:10px}

@@ -127,6 +127,98 @@
     return (placeholder ? '<option value="">' + esc(placeholder) + '</option>' : '') +
       list.map(function (x) { return '<option' + (x === selected ? ' selected' : '') + '>' + esc(x) + '</option>'; }).join('');
   }
+  // Dates as three dropdowns (day, month in words, year newest first): quicker than a calendar on a phone.
+  // The chosen date is kept in a hidden input (yyyy-mm-dd), so the rest of the form reads it like any other field.
+  var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  function dateField(fieldId, key, value, label, years, required) {
+    var parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '') || [];
+    var y = parts[1] || '', m = parts[2] ? String(Number(parts[2])) : '', d = parts[3] ? String(Number(parts[3])) : '';
+    var o = function (list, sel, ph) {
+      return '<option value="">' + ph + '</option>' + list.map(function (x) { return '<option value="' + x[0] + '"' + (String(x[0]) === sel ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('');
+    };
+    var days = [], ys = [];
+    for (var i = 1; i <= 31; i++) days.push([i, i]);
+    years.forEach(function (yr) { ys.push([yr, yr]); });
+    return '<fieldset class="field datefield"' + (required ? ' data-required' : '') + '><legend class="label' + (required ? ' req' : '') + '">' + label + '</legend>' +
+      '<div class="date3"><select id="' + fieldId + '" data-dpart="d" aria-label="' + label + ': day">' + o(days, d, 'Day') + '</select>' +
+      '<select data-dpart="m" aria-label="' + label + ': month">' + o(MONTHS.map(function (n, j) { return [j + 1, n]; }), m, 'Month') + '</select>' +
+      '<select data-dpart="y" aria-label="' + label + ': year">' + o(ys, y, 'Year') + '</select></div>' +
+      '<input type="hidden" data-k="' + key + '" value="' + esc(value || '') + '"></fieldset>';
+  }
+  function yearsBetween(from, to) { var out = []; for (var yr = from; from > to ? yr >= to : yr <= to; yr += from > to ? -1 : 1) out.push(yr); return out; }
+  // Runs before other change handlers (capture), so they always see the updated date.
+  document.addEventListener('change', function (e) {
+    var part = e.target.getAttribute && e.target.getAttribute('data-dpart');
+    if (!part) return;
+    var box = e.target.closest('.datefield');
+    var get = function (k) { return box.querySelector('[data-dpart="' + k + '"]').value; };
+    var y = get('y'), m = get('m'), d = get('d'), out = '';
+    if (y && m && d) {
+      var iso = y + '-' + ('0' + m).slice(-2) + '-' + ('0' + d).slice(-2);
+      var dt = new Date(iso + 'T12:00:00Z');
+      if (!isNaN(dt) && dt.toISOString().slice(0, 10) === iso) out = iso;
+    }
+    box.querySelector('input[type=hidden]').value = out;
+    var bad = y && m && d && !out;
+    var msg = box.querySelector('.req-msg');
+    if (bad) { if (!msg) { msg = document.createElement('span'); msg.className = 'req-msg'; box.appendChild(msg); } msg.textContent = 'That date doesn’t exist. Check the day.'; }
+    else if (msg && out) msg.remove();
+    if (out) Array.prototype.forEach.call(box.querySelectorAll('select'), function (s) { s.classList.remove('invalid'); });
+  }, true);
+
+  // Required fields show a red * and turn red with "Required" as soon as someone leaves them empty.
+  function markRequired(root) {
+    var flag = function (el, on) {
+      var field = el.closest('.field') || el.parentNode;
+      var targets = field.classList.contains('datefield') ? field.querySelectorAll('select') : [el];
+      Array.prototype.forEach.call(targets, function (t) { t.classList.toggle('invalid', on); });
+      var msg = field.querySelector('.req-msg');
+      if (on && !msg) { msg = document.createElement('span'); msg.className = 'req-msg'; msg.textContent = 'Required'; field.appendChild(msg); }
+      if (!on && msg && msg.textContent === 'Required') msg.remove();
+    };
+    root.addEventListener('focusout', function (e) {
+      var el = e.target;
+      if (el.hasAttribute && el.hasAttribute('data-required') && 'value' in el && !el.closest('[hidden]')) flag(el, !el.value.trim());
+      var box = el.closest && el.closest('.datefield[data-required]');
+      if (box) setTimeout(function () {
+        if (box.contains(document.activeElement) || box.closest('[hidden]')) return;
+        var hid = box.querySelector('input[type=hidden]');
+        if (!hid.value) flag(box.querySelector('select'), true);
+      }, 0);
+    });
+    root.addEventListener('input', function (e) { if (e.target.hasAttribute && e.target.hasAttribute('data-required') && e.target.value.trim()) flag(e.target, false); });
+    root.addEventListener('change', function (e) {
+      var box = e.target.closest && e.target.closest('.datefield');
+      if (box && box.querySelector('input[type=hidden]').value) flag(box.querySelector('select'), false);
+      var bikes = e.target.closest && e.target.closest('.bike-field');
+      if (bikes) { bikes.classList.remove('invalid-group'); var m = bikes.querySelector('.req-msg'); if (m) m.remove(); }
+    });
+  }
+
+  // On submit: turn every empty required field red at once (the error box still lists them).
+  function flagEmptyRequired(root) {
+    Array.prototype.forEach.call(root.querySelectorAll('[data-required]'), function (el) {
+      if (el.closest('[hidden]')) return;
+      if (el.classList.contains('datefield')) {
+        if (!el.querySelector('input[type=hidden]').value) {
+          Array.prototype.forEach.call(el.querySelectorAll('select'), function (s) { s.classList.add('invalid'); });
+          if (!el.querySelector('.req-msg')) { var m = document.createElement('span'); m.className = 'req-msg'; m.textContent = 'Required'; el.appendChild(m); }
+        }
+        return;
+      }
+      if (!el.value.trim()) {
+        el.classList.add('invalid');
+        var field = el.closest('.field') || el.parentNode;
+        if (!field.querySelector('.req-msg')) { var msg = document.createElement('span'); msg.className = 'req-msg'; msg.textContent = 'Required'; field.appendChild(msg); }
+      }
+    });
+    Array.prototype.forEach.call(root.querySelectorAll('.bike-field'), function (f) {
+      if (f.hidden || f.closest('[hidden]') || f.querySelector('[data-bike]:checked')) return;
+      f.classList.add('invalid-group');
+      if (!f.querySelector('.req-msg')) { var m = document.createElement('span'); m.className = 'req-msg'; m.textContent = 'Choose one'; f.appendChild(m); }
+    });
+  }
+
   function bikeOptionsOf(trip) {
     var o = trip && trip.bikeOptions;
     return o && o.length ? o : [{ label: 'Bring my own bike', hire: false }];
@@ -142,18 +234,16 @@
       '<div class="card stack person" data-i="' + i + '">' +
       '<div class="person-head"><h3>' + (isLead ? 'You' : 'Person ' + (i + 1)) + '</h3>' +
       (isLead || editing ? '' : '<button type="button" class="linkbtn remove-person">Remove</button>') + '</div>' +
-      '<div class="field"><label for="' + id('fullName') + '">Full name</label>' +
-      '<input type="text" id="' + id('fullName') + '" data-k="fullName" autocomplete="' + (isLead ? 'name' : 'off') + '" value="' + v('fullName') + '">' +
+      '<div class="field"><label class="req" for="' + id('fullName') + '">Full name</label>' +
+      '<input type="text" id="' + id('fullName') + '" data-k="fullName" data-required autocomplete="' + (isLead ? 'name' : 'off') + '" value="' + v('fullName') + '">' +
       '<span class="hint">As it appears in the passport.</span></div>' +
-      '<div class="grid2">' +
-      '<div class="field"><label for="' + id('dob') + '">Date of birth</label><input type="date" id="' + id('dob') + '" data-k="dob" value="' + v('dob') + '"></div>' +
-      '<div class="field"><label for="' + id('mobile') + '">Phone number' + (isLead ? '' : ' (optional)') + '</label><input type="tel" id="' + id('mobile') + '" data-k="mobile" autocomplete="' + (isLead ? 'tel' : 'off') + '" value="' + v('mobile') + '"></div>' +
-      '</div>' +
-      '<div class="field adult-field" hidden><label for="' + id('responsibleAdult') + '">Adult responsible for them on the trip</label>' +
-      '<input type="text" id="' + id('responsibleAdult') + '" data-k="responsibleAdult" value="' + v('responsibleAdult') + '">' +
+      dateField(id('dob'), 'dob', p.dob, 'Date of birth', yearsBetween(new Date().getFullYear(), 1925), true) +
+      '<div class="field"><label' + (isLead ? ' class="req"' : '') + ' for="' + id('mobile') + '">Phone number' + (isLead ? '' : ' (optional)') + '</label><input type="tel" id="' + id('mobile') + '" data-k="mobile"' + (isLead ? ' data-required' : '') + ' autocomplete="' + (isLead ? 'tel' : 'off') + '" value="' + v('mobile') + '"></div>' +
+      '<div class="field adult-field" hidden><label class="req" for="' + id('responsibleAdult') + '">Adult responsible for them on the trip</label>' +
+      '<input type="text" id="' + id('responsibleAdult') + '" data-k="responsibleAdult" data-required value="' + v('responsibleAdult') + '">' +
       '<span class="hint">Under 18 on the first day of the trip. Name the parent, or the adult the parents have named in writing.</span></div>' +
       '<div class="field"><label for="' + id('role') + '">Going as</label><select id="' + id('role') + '" data-k="role">' + opts(ROLES, p.role || 'Rider') + '</select></div>' +
-      '<fieldset class="field bike-field"><legend class="label">Bike: I would prefer</legend>' +
+      '<fieldset class="field bike-field"><legend class="label req">Bike: I would prefer</legend>' +
       bikes.map(function (o, j) {
         return '<label class="check"><input type="radio" name="' + id('bike') + '" data-bike value="' + esc(o.label) + '" data-hire="' + (o.hire ? '1' : '') + '"' + (p.bikeChoice === o.label ? ' checked' : '') + '>' + esc(o.label) + '</label>';
       }).join('') + '<input type="hidden" data-k="bikeChoice" value="' + v('bikeChoice') + '"></fieldset>' +
@@ -178,7 +268,7 @@
         '<span class="hint">Only the organiser sees these, and they are deleted after the trip.</span>' +
         '<div class="grid2"><div class="field"><label for="' + id('passportNumber') + '">Passport number</label><input type="text" id="' + id('passportNumber') + '" data-k="passportNumber" autocomplete="off" value="' + v('passportNumber') + '"></div>' +
         '<div class="field"><label for="' + id('passportCountry') + '">Issuing country</label><input type="text" id="' + id('passportCountry') + '" data-k="passportCountry" value="' + v('passportCountry') + '"></div></div>' +
-        '<div class="field"><label for="' + id('passportExpiry') + '">Expiry date</label><input type="date" id="' + id('passportExpiry') + '" data-k="passportExpiry" value="' + v('passportExpiry') + '"></div>' +
+        dateField(id('passportExpiry'), 'passportExpiry', p.passportExpiry, 'Expiry date', yearsBetween(new Date().getFullYear(), new Date().getFullYear() + 12), false) +
         '</div></details>' +
         '<details class="more"' + (p.safetyInfo ? ' open' : '') + '><summary>Anything we should know for their safety (optional)</summary><div class="stack">' +
         '<span class="hint">For example a condition or medication emergency responders would need to know about. Seen only by the Ride Coordinator and Deputy, and deleted within 30 days of the trip.</span>' +
@@ -511,6 +601,7 @@
     DEMO: DEMO, api: api, $: $, esc: esc, money: money, today: today, niceDate: niceDate, ageOn: ageOn, waLink: waLink,
     markdown: markdown, toast: toast, copy: copy, errorBox: errorBox, myBookings: myBookings, rememberBooking: rememberBooking, forgetBooking: forgetBooking,
     personHtml: personHtml, readPerson: readPerson, wirePerson: wirePerson, checkPeople: checkPeople, demoBanner: demoBanner,
+    markRequired: markRequired, flagEmptyRequired: flagEmptyRequired,
     ROLES: ROLES, BIKE_TYPES: BIKE_TYPES, STAGES: STAGES,
   };
 })();

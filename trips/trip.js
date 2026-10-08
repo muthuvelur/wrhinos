@@ -194,6 +194,7 @@
     if (busy) return;
     var d = collect();
     var errs = check(d);
+    if (errs.length) T.flagEmptyRequired($('regForm'));
     T.errorBox($('regError'), errs);
     var badEmergency = !!d.lead.emergencyMobile && d.lead.emergencyMobile.replace(/\D/g, '').length < 10;
     $('emergencyMobile').classList.toggle('invalid', badEmergency);
@@ -263,6 +264,7 @@
   // ---------- wiring ----------
   $('addPerson').addEventListener('click', function () { addPerson(); });
   $('people').addEventListener('input', function (e) { if (e.target.getAttribute('data-k') === 'dob') updateSummary(); });
+  T.markRequired($('regForm'));
   $('regForm').addEventListener('submit', function (e) { e.preventDefault(); submit(false); });
   $('joinWaiting').addEventListener('click', function () { submit(true); });
   $('cancelWaiting').addEventListener('click', function () { $('fullPanel').hidden = true; $('submitCard').hidden = false; });

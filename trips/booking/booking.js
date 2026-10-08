@@ -254,10 +254,13 @@
   $('nextEdit').addEventListener('click', openEdit);
   $('editBack').addEventListener('click', function (e) { e.preventDefault(); closeEdit(); });
   $('editCancel').addEventListener('click', closeEdit);
+  T.markRequired($('editForm'));
+  T.markRequired($('addPersonBox'));
   $('editForm').addEventListener('submit', function (e) {
     e.preventDefault();
     var people = Array.prototype.map.call($('editPeople').children, T.readPerson);
     var errs = T.checkPeople(people, data.trip.startDate);
+    if (errs.length) T.flagEmptyRequired($('editForm'));
     T.errorBox($('editError'), errs);
     if (errs.length) return;
     $('saveBtn').disabled = true;
