@@ -181,9 +181,19 @@ function parseRoutes_(text) {
   }).filter(function (r) { return r.label; });
 }
 
-function placesTaken_(bookings, tripId) {
+// Support crew come along but don't use up one of the trip's places.
+function placeCount_(people) { return people.filter(function (p) { return p.role !== 'Support crew'; }).length; }
+function supportCount_(bookings, tripId, people) {
+  const live = {};
+  bookings.forEach(function (b) { if (b.tripId === tripId && b.status === 'Booked') live[b.ref] = true; });
+  return people.filter(function (p) { return p.tripId === tripId && live[p.ref] && p.role === 'Support crew'; }).length;
+}
+// Places used by Booked bookings. Without the People table it falls back to each booking's head count.
+function placesTaken_(bookings, tripId, people) {
+  const byRef = {};
+  (people || []).forEach(function (p) { if (p.tripId === tripId) (byRef[p.ref] = byRef[p.ref] || []).push(p); });
   return bookings.filter(function (b) { return b.tripId === tripId && b.status === 'Booked'; })
-    .reduce(function (a, b) { return a + (Number(b.people) || 0); }, 0);
+    .reduce(function (a, b) { return a + (byRef[b.ref] ? placeCount_(byRef[b.ref]) : Number(b.people) || 0); }, 0);
 }
 
 function depositFor_(people, perPerson) {
@@ -640,7 +650,8 @@ function clean0_(r) { const q = Object.assign({}, r); delete q._row; return q; }
 
 function orgTrips_(all) {
   return all.Trips.map(function (t) {
-    const x = publicTrip_(t, all.Bookings);
+    const x = publicTrip_(t, all.Bookings, all.People);
+    x.support = supportCount_(all.Bookings, t.id, all.People);
     x.routesText = t.routes;
     x.claimed = all.Payments.filter(function (p) { return p.tripId === t.id && p.status === 'Claimed'; }).length;
     x.depositAsked = t.depositAtSignup === 'Yes' || all.Calls.some(function (c) { return c.tripId === t.id && c.stage === 'Deposit'; });
@@ -729,8 +740,8 @@ function tripById_(id) {
   return readTable_('Trips').filter(function (t) { return t.id === id; })[0] || null;
 }
 
-function publicTrip_(t, bookings) {
-  const left = Math.max(0, Number(t.places) - placesTaken_(bookings, t.id));
+function publicTrip_(t, bookings, people) {
+  const left = Math.max(0, Number(t.places) - placesTaken_(bookings, t.id, people));
   return {
     id: t.id, name: t.name, status: t.status, datesText: t.datesText, startDate: t.startDate,
     places: Number(t.places), placesLeft: left, depositPerPerson: Number(t.depositPerPerson), depositDays: Number(t.depositDays),
@@ -750,15 +761,15 @@ function doGet(e) {
   const p = (e && e.parameter) || {};
   try {
     if (p.action === 'trips') {
-      const bookings = readTable_('Bookings');
+      const bookings = readTable_('Bookings'), people = readTable_('People');
       const trips = readTable_('Trips').filter(function (t) { return t.status !== 'Draft'; })
-        .map(function (t) { const x = publicTrip_(t, bookings); delete x.details; return x; });
+        .map(function (t) { const x = publicTrip_(t, bookings, people); delete x.details; return x; });
       return json_({ ok: true, trips: trips, club: settings_().clubName });
     }
     if (p.action === 'trip') {
       const t = tripById_(String(p.id || ''));
       if (!t || t.status === 'Draft') return json_({ ok: false, error: 'This trip is not open yet, or the link is wrong.' });
-      return json_({ ok: true, trip: publicTrip_(t, readTable_('Bookings')), ready: !settings_().problems.length });
+      return json_({ ok: true, trip: publicTrip_(t, readTable_('Bookings'), readTable_('People')), ready: !settings_().problems.length });
     }
     return json_({ ok: true, service: 'W/Rhinos trips' });
   } catch (err) {
@@ -886,12 +897,13 @@ function register_(input) {
     return { ok: false, busy: true, error: 'Lots of people are signing up right now. Please wait a few minutes and press Register again. Your details are still filled in.' };
   }
 
-  const left = Number(trip.places) - placesTaken_(bookings, trip.id);
+  const left = Number(trip.places) - placesTaken_(bookings, trip.id, readTable_('People'));
   const b = v.booking;
-  b.status = v.people.length <= left ? 'Booked' : 'Waiting list';
+  const needed = placeCount_(v.people);
+  b.status = needed <= left ? 'Booked' : 'Waiting list';
   if (input.acceptWaitingList !== true && b.status === 'Waiting list') {
     return { ok: false, full: true, placesLeft: Math.max(0, left), error: left > 0
-      ? 'Only ' + left + (left === 1 ? ' place is' : ' places are') + ' left and your booking needs ' + v.people.length + '.'
+      ? 'Only ' + left + (left === 1 ? ' place is' : ' places are') + ' left and your booking needs ' + needed + '.'
       : 'The trip is full.' };
   }
   const existing = {};
@@ -1018,8 +1030,8 @@ function addPerson_(b, input, force, by) {
   const v = validatePerson_(input, existing.length, trip, false);
   if (v.errors.length) return { ok: false, error: v.errors.join(' '), errors: v.errors };
   if (existing.some(function (p) { return String(p.fullName).toLowerCase() === v.value.fullName.toLowerCase(); })) return { ok: false, error: v.value.fullName + ' is already in this booking.' };
-  if (b.status === 'Booked') {
-    const left = Number(trip.places) - placesTaken_(readTable_('Bookings'), trip.id);
+  if (b.status === 'Booked' && v.value.role !== 'Support crew') {
+    const left = Number(trip.places) - placesTaken_(readTable_('Bookings'), trip.id, readTable_('People'));
     if (left < 1 && !force) {
       return { ok: false, full: true, needsForce: true, error: by === 'the booker'
         ? 'Sorry, the trip is full, so nobody can be added to this booking. They can make their own booking to join the waiting list.'
@@ -1087,7 +1099,7 @@ function withdraw_(input) {
       subject: 'Cancelled: ' + b.leadName + ' (' + b.ref + ') – ' + trip.name,
       body: [b.leadName + ' has cancelled booking ' + b.ref + ' for ' + trip.name + ' (' + b.people + (Number(b.people) === 1 ? ' person' : ' people') + ').',
         reason ? 'Reason given: ' + reason : 'No reason given.', '',
-        'Places now left: ' + Math.max(0, Number(trip.places) - placesTaken_(bookings, trip.id)) + ' of ' + trip.places + '.',
+        'Places now left: ' + Math.max(0, Number(trip.places) - placesTaken_(bookings, trip.id, readTable_('People'))) + ' of ' + trip.places + '.',
         waiting.length ? waiting.length + ' booking(s) on the waiting list. Offer them the places on the organiser page: wrhinos.com/organiser' : 'Nobody is on the waiting list.',
         '', 'Any deposit paid stays with the club, as set out in the Framework.'].join('\n'),
     });
@@ -1155,7 +1167,7 @@ function admin_(input) {
       const now = new Date().toISOString();
       if (t.id) {
         const old = ids[t.id];
-        const taken = placesTaken_(readTable_('Bookings'), t.id);
+        const taken = placesTaken_(readTable_('Bookings'), t.id, readTable_('People'));
         if (t.places < taken) return { ok: false, error: taken + ' places are already booked, so places cannot go below ' + taken + '.' };
         updateRow_('Trips', old._row, Object.assign({}, old, t, { createdAt: old.createdAt, updatedAt: now }));
       } else {
@@ -1197,9 +1209,10 @@ function admin_(input) {
       if (!status) return { ok: false, error: 'Unknown status.' };
       const trip = tripById_(b.tripId);
       if (status === 'Booked' && b.status !== 'Booked') {
-        const left = Number(trip.places) - placesTaken_(readTable_('Bookings'), trip.id);
-        if (Number(b.people) > left && input.force !== true) {
-          return { ok: false, needsForce: true, error: 'Only ' + Math.max(0, left) + ' places are left and this booking has ' + b.people + ' people.' };
+        const left = Number(trip.places) - placesTaken_(readTable_('Bookings'), trip.id, readTable_('People'));
+        const needed = placeCount_(peopleOf_(b.ref));
+        if (needed > left && input.force !== true) {
+          return { ok: false, needsForce: true, error: 'Only ' + Math.max(0, left) + ' places are left and this booking needs ' + needed + '.' };
         }
       }
       updateRow_('Bookings', b._row, Object.assign({}, b, { status: status, updatedAt: new Date().toISOString() }));
@@ -1380,7 +1393,7 @@ function keepWarm() {
 if (typeof module !== 'undefined') {
   module.exports = {
     round2_: round2_, money_: money_, normaliseMobile_: normaliseMobile_, isoDate_: isoDate_, ageOn_: ageOn_, slugify_: slugify_,
-    generateReference_: generateReference_, parseRoutes_: parseRoutes_, placesTaken_: placesTaken_, depositFor_: depositFor_,
+    generateReference_: generateReference_, parseRoutes_: parseRoutes_, placesTaken_: placesTaken_, placeCount_: placeCount_, supportCount_: supportCount_, depositFor_: depositFor_,
     validateTrip_: validateTrip_, validatePerson_: validatePerson_, validateRegistration_: validateRegistration_,
     findDuplicate_: findDuplicate_, paymentTotals_: paymentTotals_, validateClaim_: validateClaim_, bookingLink_: bookingLink_,
     buildRegistrationEmail_: buildRegistrationEmail_, buildPlaceOfferedEmail_: buildPlaceOfferedEmail_, parseSettings_: parseSettings_,

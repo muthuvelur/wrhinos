@@ -117,6 +117,24 @@ test('places taken counts only Booked on this trip', () => {
   assert.strictEqual(C.placesTaken_(bookings, 'rhine-2027'), 4);
 });
 
+test('support crew do not use up places', () => {
+  const bookings = [
+    { ref: 'AAAAA', tripId: 'rhine-2027', status: 'Booked', people: '3' },
+    { ref: 'BBBBB', tripId: 'rhine-2027', status: 'Booked', people: '1' },
+    { ref: 'CCCCC', tripId: 'rhine-2027', status: 'Waiting list', people: '1' },
+  ];
+  const people = [
+    { ref: 'AAAAA', tripId: 'rhine-2027', role: 'Rider' },
+    { ref: 'AAAAA', tripId: 'rhine-2027', role: 'Non-rider' },
+    { ref: 'AAAAA', tripId: 'rhine-2027', role: 'Support crew' },
+    { ref: 'BBBBB', tripId: 'rhine-2027', role: 'Support crew' },
+    { ref: 'CCCCC', tripId: 'rhine-2027', role: 'Support crew' },
+  ];
+  assert.strictEqual(C.placesTaken_(bookings, 'rhine-2027', people), 2);
+  assert.strictEqual(C.supportCount_(bookings, 'rhine-2027', people), 2);
+  assert.strictEqual(C.placeCount_(people.slice(0, 3)), 2);
+});
+
 test('references are name-shaped, unique and never blocked words', () => {
   const seen = {};
   for (let i = 0; i < 3000; i++) {

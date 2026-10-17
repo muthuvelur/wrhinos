@@ -137,7 +137,7 @@
       $('tripCards').innerHTML = trips.length ? trips.map(function (t) {
         return '<a href="#" class="card trip-card" data-id="' + esc(t.id) + '"><p class="eyebrow">' + esc(t.datesText) + '</p><h2>' + esc(t.name) + '</h2>' +
           '<div class="row"><span class="chip ' + (t.status === 'Open' ? 'ok' : t.status === 'Draft' ? 'warn' : '') + '">' + esc(t.status) + '</span>' +
-          '<span class="small muted">' + (t.places - t.placesLeft) + ' of ' + t.places + ' places taken' + (t.waiting ? ' · ' + t.waiting + ' waiting' : '') + '</span>' +
+          '<span class="small muted">' + (t.places - t.placesLeft) + ' of ' + t.places + ' places taken' + (t.support ? ' · ' + t.support + ' support crew' : '') + (t.waiting ? ' · ' + t.waiting + ' waiting' : '') + '</span>' +
           (t.claimed ? '<span class="chip warn">' + t.claimed + ' payment' + (t.claimed === 1 ? '' : 's') + ' to check</span>' : '') + '</div></a>';
       }).join('') : '<div class="card muted">No trips yet. Tap “New trip”.</div>';
       Array.prototype.forEach.call(document.querySelectorAll('#tripCards .trip-card'), function (a) {
@@ -277,23 +277,28 @@
   }
 
   function owes(b) { return current.depositAsked === false ? 0 : Math.max(0, Math.round((b.depositDue - b.totals.confirmed) * 100) / 100); }
+  // Support crew travel with the trip but don't take one of its places.
+  function placesFor(b) { return b.persons && b.persons.length ? b.persons.filter(function (p) { return p.role !== 'Support crew'; }).length : b.people; }
+  function supportIn(b) { return (b.persons || []).filter(function (p) { return p.role === 'Support crew'; }).length; }
   var FILTERS = [
     ['all', 'All', function (b) { return b.status !== 'Cancelled'; }],
     ['check', 'Payments to check', function (b) { return b.payments.some(function (p) { return p.status === 'Claimed'; }); }],
     ['unpaid', 'Deposit not paid', function (b) { return b.status === 'Booked' && owes(b) > 0; }],
     ['overdue', 'Deposit overdue', function (b) { return b.status === 'Booked' && owes(b) > 0 && Date.now() - new Date(b.bookedAt).getTime() > current.depositDays * 86400000; }],
+    ['support', 'Support crew', function (b) { return b.status !== 'Cancelled' && supportIn(b) > 0; }],
     ['waiting', 'Waiting list', function (b) { return b.status === 'Waiting list'; }],
     ['cancelled', 'Cancelled', function (b) { return b.status === 'Cancelled'; }],
   ];
 
   function renderBookings() {
     var booked = bookings.filter(function (b) { return b.status === 'Booked'; });
-    var taken = booked.reduce(function (a, b) { return a + b.people; }, 0);
+    var taken = booked.reduce(function (a, b) { return a + placesFor(b); }, 0);
+    var support = booked.reduce(function (a, b) { return a + supportIn(b); }, 0);
     var due = booked.reduce(function (a, b) { return a + b.depositDue; }, 0);
     var got = bookings.reduce(function (a, b) { return a + b.totals.confirmed; }, 0);
-    var waitingPeople = bookings.filter(function (b) { return b.status === 'Waiting list'; }).reduce(function (a, b) { return a + b.people; }, 0);
+    var waitingPeople = bookings.filter(function (b) { return b.status === 'Waiting list'; }).reduce(function (a, b) { return a + placesFor(b); }, 0);
     $('stats').innerHTML = [
-      [taken + ' / ' + current.places, 'Places taken'],
+      [taken + ' / ' + current.places, 'Places taken' + (support ? ' · plus ' + support + ' support crew' : '')],
       [Math.max(0, current.places - taken), 'Places left'],
       [waitingPeople, 'People waiting'],
       current.depositAsked === false ? ['Not yet', 'Deposits asked for'] : [T.money(got) + ' / ' + T.money(due), 'Deposits checked'],

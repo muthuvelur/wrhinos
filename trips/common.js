@@ -439,7 +439,8 @@
       var of = function (list) { return list.filter(function (x) { return x.tripId === t.id; }); };
       return window.Money.balances(t, of(db.bookings), flatPeople(db, t.id), of(db.payments), of(db.expenses), of(db.calls));
     };
-    var taken = function (db, id) { return db.bookings.filter(function (b) { return b.tripId === id && b.status === 'Booked'; }).reduce(function (a, b) { return a + b.people; }, 0); };
+    var needs = function (people) { return people.filter(function (p) { return p.role !== 'Support crew'; }).length; };
+    var taken = function (db, id) { return db.bookings.filter(function (b) { return b.tripId === id && b.status === 'Booked'; }).reduce(function (a, b) { return a + (b.persons ? needs(b.persons) : b.people); }, 0); };
     var routes = function (t) { return String(t.routes || '').split('\n').map(function (l) { var i = l.lastIndexOf('|'); var label = (i === -1 ? l : l.slice(0, i)).trim(); var url = (i === -1 ? '' : l.slice(i + 1)).trim(); return { label: label, url: /^https:\/\//.test(url) ? url : '' }; }).filter(function (r) { return r.label; }); };
     var bikeOpts = function (t) { return String(t.bikeOptions || 'Bring my own bike | own').split('\n').map(function (l) { var i = l.lastIndexOf('|'); return { label: (i === -1 ? l : l.slice(0, i)).trim(), hire: (i === -1 ? '' : l.slice(i + 1)).trim().toLowerCase() === 'hire' }; }).filter(function (o) { return o.label; }); };
     var missing = function (b) {
@@ -473,8 +474,8 @@
             var errs = checkPeople(body.people, t.startDate);
             if (errs.length) return { ok: false, error: errs.join(' '), errors: errs };
             var left = t.places - taken(db, t.id);
-            var status = body.people.length <= left ? 'Booked' : 'Waiting list';
-            if (status === 'Waiting list' && body.acceptWaitingList !== true) return { ok: false, full: true, placesLeft: Math.max(0, left), error: left > 0 ? 'Only ' + left + (left === 1 ? ' place is' : ' places are') + ' left and your booking needs ' + body.people.length + '.' : 'The trip is full.' };
+            var status = needs(body.people) <= left ? 'Booked' : 'Waiting list';
+            if (status === 'Waiting list' && body.acceptWaitingList !== true) return { ok: false, full: true, placesLeft: Math.max(0, left), error: left > 0 ? 'Only ' + left + (left === 1 ? ' place is' : ' places are') + ' left and your booking needs ' + needs(body.people) + '.' : 'The trip is full.' };
             var persons = body.people.map(function (p, i) { var age = ageOn(p.dob, t.startDate); var o = bikeOpts(t).filter(function (x) { return x.label === p.bikeChoice; })[0]; return Object.assign({}, p, { n: i + 1, under18: age !== null && age < 18 ? 'Yes' : 'No', bikeHire: o ? (o.hire ? 'Yes' : 'No') : '' }); });
             b = Object.assign({}, body.lead, { ref: refGen(db), token: uid(20), tripId: t.id, status: status, bookedAt: new Date().toISOString(), leadName: persons[0].fullName, mobile: persons[0].mobile, people: persons.length,
               depositDue: persons.filter(function (p) { return p.role !== 'Support crew'; }).length * t.depositPerPerson, roomType: body.roomType || '', roomRequests: body.roomRequests || '', notes: body.notes || '', organiserNotes: '', persons: persons });
@@ -500,7 +501,7 @@
             if (body.pass !== PASS) return { ok: false, auth: false, error: 'Wrong passcode. In this preview the passcode is: ' + PASS };
             if (body.op === 'login') return { ok: true, problems: ['Preview mode: the Google Sheet is not connected yet, so nothing here is real or shared.'] };
             if (body.op === 'overview') {
-              var ovTrips = db.trips.map(function (x) { return Object.assign(pub(db, x), { routesText: x.routes, claimed: db.payments.filter(function (p) { return p.tripId === x.id && p.status === 'Claimed'; }).length,
+              var ovTrips = db.trips.map(function (x) { return Object.assign(pub(db, x), { routesText: x.routes, claimed: db.payments.filter(function (p) { return p.tripId === x.id && p.status === 'Claimed'; }).length, support: db.bookings.filter(function (b) { return b.tripId === x.id && b.status === 'Booked'; }).reduce(function (a, b) { return a + (b.persons || []).length - needs(b.persons || []); }, 0),
                 depositAsked: x.depositAtSignup === 'Yes' || db.calls.some(function (c) { return c.tripId === x.id && c.stage === 'Deposit'; }) }); });
               var byTrip = {};
               db.trips.forEach(function (tt) {
@@ -514,7 +515,7 @@
               });
               return { ok: true, problems: [], bankProblems: [], trips: ovTrips, byTrip: byTrip };
             }
-            if (body.op === 'trips') return { ok: true, problems: [], trips: db.trips.map(function (x) { return Object.assign(pub(db, x), { routesText: x.routes, claimed: db.payments.filter(function (p) { return p.tripId === x.id && p.status === 'Claimed'; }).length,
+            if (body.op === 'trips') return { ok: true, problems: [], trips: db.trips.map(function (x) { return Object.assign(pub(db, x), { routesText: x.routes, claimed: db.payments.filter(function (p) { return p.tripId === x.id && p.status === 'Claimed'; }).length, support: db.bookings.filter(function (b) { return b.tripId === x.id && b.status === 'Booked'; }).reduce(function (a, b) { return a + (b.persons || []).length - needs(b.persons || []); }, 0),
               depositAsked: x.depositAtSignup === 'Yes' || db.calls.some(function (c) { return c.tripId === x.id && c.stage === 'Deposit'; }) }); }) };
             if (body.op === 'saveTrip') {
               var tr = body.trip;
@@ -530,7 +531,7 @@
             if (body.op === 'setStatus') {
               b = db.bookings.filter(function (x) { return x.ref === body.ref; })[0];
               t = db.trips.filter(function (x) { return x.id === b.tripId; })[0];
-              if (body.status === 'Booked' && b.status !== 'Booked' && b.people > t.places - taken(db, t.id) && body.force !== true) return { ok: false, needsForce: true, error: 'Only ' + Math.max(0, t.places - taken(db, t.id)) + ' places are left and this booking has ' + b.people + ' people.' };
+              if (body.status === 'Booked' && b.status !== 'Booked' && needs(b.persons || []) > t.places - taken(db, t.id) && body.force !== true) return { ok: false, needsForce: true, error: 'Only ' + Math.max(0, t.places - taken(db, t.id)) + ' places are left and this booking needs ' + needs(b.persons || []) + '.' };
               b.status = body.status; save(db); return { ok: true, emailed: false };
             }
             if (body.op === 'saveNotes') { b = db.bookings.filter(function (x) { return x.ref === body.ref; })[0]; b.organiserNotes = body.notes; save(db); return { ok: true }; }
@@ -563,7 +564,7 @@
             var tt = db.trips.filter(function (x) { return x.id === bk.tripId; })[0];
             var errs = checkPeople([{ fullName: 'x x', dob: '1970-01-01', role: 'Non-rider', mobile: '07000000000' }, person], tt.startDate);
             if (errs.length) return { ok: false, error: errs.join(' ') };
-            if (bk.status === 'Booked' && tt.places - taken(db, tt.id) < 1 && !force) return { ok: false, needsForce: true, error: 'The trip is full.' };
+            if (bk.status === 'Booked' && person.role !== 'Support crew' && tt.places - taken(db, tt.id) < 1 && !force) return { ok: false, needsForce: true, error: 'The trip is full.' };
             var o = bikeOpts(tt).filter(function (x) { return x.label === person.bikeChoice; })[0], age = ageOn(person.dob, tt.startDate);
             var n = bk.persons.reduce(function (m, p) { return Math.max(m, p.n); }, 0) + 1;
             bk.persons.push(Object.assign({}, person, { n: n, under18: age !== null && age < 18 ? 'Yes' : 'No', bikeHire: o ? (o.hire ? 'Yes' : 'No') : '' }));
