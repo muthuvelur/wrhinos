@@ -1143,20 +1143,34 @@ function checkPasscode_(pass) {
   return '';
 }
 
+// Changes made on the organiser page. With withOverview, the reply also carries the refreshed overview,
+// so the page needs one slow Google round trip per change instead of two.
+const WRITE_OPS = ['saveTrip', 'payment', 'addPayment', 'setStatus', 'saveNotes', 'addPerson', 'removePerson', 'saveExpense', 'deleteExpense', 'call'];
+
+function overview_(cfg) {
+  const all = readAll_();
+  const byTrip = {};
+  all.Trips.forEach(function (t) { byTrip[t.id] = { bookings: orgBookings_(t.id, all, cfg), money: orgMoney_(t, all, cfg) }; });
+  return { ok: true, problems: cfg.problems, bankProblems: cfg.bankProblems, trips: orgTrips_(all), byTrip: byTrip };
+}
+
 function admin_(input) {
   const err = checkPasscode_(input.pass);
   if (err) return { ok: false, error: err, auth: false };
   const cfg = settings_();
+  const r = adminOp_(input, cfg);
+  if (r && r.ok && input.withOverview === true && WRITE_OPS.indexOf(input.op) !== -1) {
+    try { r.overview = overview_(cfg); } catch (e) { console.error('Overview after ' + input.op + ': ' + e); }
+  }
+  return r;
+}
+
+function adminOp_(input, cfg) {
   switch (input.op) {
     case 'login': return { ok: true, problems: cfg.problems, bankProblems: cfg.bankProblems };
     case 'trips': return Object.assign({ ok: true, problems: cfg.problems, bankProblems: cfg.bankProblems }, { trips: orgTrips_(readAll_()) });
     // Everything the organiser page shows, for every trip, in one request: Google is slow per request, not per row.
-    case 'overview': {
-      const all = readAll_();
-      const byTrip = {};
-      all.Trips.forEach(function (t) { byTrip[t.id] = { bookings: orgBookings_(t.id, all, cfg), money: orgMoney_(t, all, cfg) }; });
-      return { ok: true, problems: cfg.problems, bankProblems: cfg.bankProblems, trips: orgTrips_(all), byTrip: byTrip };
-    }
+    case 'overview': return overview_(cfg);
     case 'saveTrip': {
       const trips = readTable_('Trips');
       const ids = {};

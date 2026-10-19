@@ -12,9 +12,15 @@
   var store = window.localStorage;
   try { pass = store.getItem('wrhinos-org') || sessionStorage.getItem('wrhinos-org') || ''; } catch (e) { /* */ }
 
+  // Changes ask Google to send the refreshed data back in the same reply, so there's one wait, not two.
+  var WRITE_OPS = ['saveTrip', 'payment', 'addPayment', 'setStatus', 'saveNotes', 'addPerson', 'removePerson', 'saveExpense', 'deleteExpense', 'call'];
+  var nextOverview = null;
   function admin(op, extra) {
-    return T.api.post(Object.assign({ action: 'admin', op: op, pass: pass }, extra || {})).then(function (r) {
+    var body = Object.assign({ action: 'admin', op: op, pass: pass }, extra || {});
+    if (WRITE_OPS.indexOf(op) !== -1) body.withOverview = true;
+    return T.api.post(body).then(function (r) {
       if (r && r.auth === false) { lock(r.error); throw new Error(''); }
+      if (r && r.overview) { nextOverview = r.overview; delete r.overview; }
       return r;
     });
   }
@@ -40,6 +46,7 @@
     pass = '';
     try { store.removeItem('wrhinos-org'); store.removeItem(OV_KEY); sessionStorage.removeItem('wrhinos-org'); sessionStorage.removeItem(OV_KEY); } catch (e) { /* */ }
     overview = null;
+    nextOverview = null;
     views('loginView');
     T.errorBox($('loginError'), msg ? [msg] : []);
   }
@@ -71,20 +78,22 @@
   // keeps it for this browser tab, and opens trips and tabs from it instantly. Any change refreshes it in one go.
   var overview = null;
   var OV_KEY = 'wrhinos-org-overview';
+  function keepOverview(r) {
+    if (r && r.ok) {
+      if (!Array.isArray(r.trips)) throw new Error('The trips didn’t load. Tap Lock, then sign in again.');
+      overview = r;
+      try { store.setItem(OV_KEY, JSON.stringify(r)); } catch (e) { /* too big or blocked: just slower */ }
+    }
+    return r;
+  }
   function fetchOverview() {
+    if (nextOverview) { var ready = nextOverview; nextOverview = null; return Promise.resolve(keepOverview(ready)); }
     $('syncing').hidden = false;
     return admin('overview').then(function (r) {
       // An older Google script without "overview": fall back to loading each part when needed.
       if (r && !r.ok && /Unknown organiser request/.test(r.error || '')) return admin('trips').then(function (t) { if (t.ok) { t.byTrip = {}; t.oldScript = true; } return t; });
       return r;
-    }).then(function (r) {
-      if (r && r.ok) {
-        if (!Array.isArray(r.trips)) throw new Error('The trips didn’t load. Tap Lock, then sign in again.');
-        overview = r;
-        try { store.setItem(OV_KEY, JSON.stringify(r)); } catch (e) { /* too big or blocked: just slower */ }
-      }
-      return r;
-    }).then(function (r) { $('syncing').hidden = true; return r; }, function (e) { $('syncing').hidden = true; throw e; });
+    }).then(keepOverview).then(function (r) { $('syncing').hidden = true; return r; }, function (e) { $('syncing').hidden = true; throw e; });
   }
   function tripData(id) { return overview && overview.byTrip && overview.byTrip[id]; }
   function sortBookings(list) { return (list || []).slice().sort(function (a, b) { return String(a.bookedAt).localeCompare(String(b.bookedAt)); }); }

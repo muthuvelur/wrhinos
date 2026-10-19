@@ -465,7 +465,14 @@
     api = {
       trips: function () { return getDb().then(function (db) { return { ok: true, trips: db.trips.filter(function (t) { return t.status !== 'Draft'; }).map(function (t) { return pub(db, t); }) }; }); },
       trip: function (id) { return getDb().then(function (db) { var t = db.trips.filter(function (x) { return x.id === id && x.status !== 'Draft'; })[0]; return t ? { ok: true, trip: pub(db, t), ready: true } : { ok: false, error: 'This trip is not open yet, or the link is wrong.' }; }); },
+      // Like the real backend: a change can ask for the refreshed organiser overview in the same reply.
       post: function (body) {
+        return api.postOne(body).then(function (r) {
+          if (!(body.withOverview && r && r.ok)) return r;
+          return api.postOne({ action: 'admin', op: 'overview', pass: body.pass }).then(function (ov) { r.overview = ov; return r; });
+        });
+      },
+      postOne: function (body) {
         return wait(500).then(getDb).then(function (db) {
           var b, t;
           if (body.action === 'register') {
