@@ -217,3 +217,5 @@ label.req::after,legend.req::after{content:" *"; color:var(--mark); font-weight:
 .person-card .linkbtn{align-self:flex-start}
 h4.sub{margin:4px 0 -6px; font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
 .booking .kv a{color:inherit}
+.spinner.small{width:13px; height:13px; border-width:2px; vertical-align:-2px; margin-right:4px}
+button:disabled{opacity:.75; cursor:progress}

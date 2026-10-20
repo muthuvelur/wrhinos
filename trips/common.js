@@ -425,10 +425,10 @@
         return db;
       });
     };
+    var fill = function (db) { db.expenses = db.expenses || []; db.calls = db.calls || []; db.trips.forEach(function (t) { if (t.charityFee === undefined) t.charityFee = 50; }); return db; };
     var getDb = function () {
       var db = load();
-      if (db) { db.expenses = db.expenses || []; db.calls = db.calls || []; db.trips.forEach(function (t) { if (t.charityFee === undefined) t.charityFee = 50; }); }
-      return db ? Promise.resolve(db) : seed();
+      return db ? Promise.resolve(fill(db)) : seed().then(fill);
     };
     var flatPeople = function (db, tripId) {
       var out = [];

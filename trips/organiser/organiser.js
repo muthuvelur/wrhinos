@@ -395,12 +395,26 @@
       '</div></details>';
   }
 
+  // Show straight away that a tap has been taken, because Google can take a while to answer.
+  var BUSY = { confirm: 'Confirming…', reject: 'Saving…', offer: 'Giving places…', force: 'Giving places…', cancel: 'Cancelling…', restore: 'Restoring…',
+    rmperson: 'Removing…', notes: 'Saving…', 'addperson-save': 'Adding…', 'addperson-force': 'Adding…', addpay: 'Saving…' };
+  var busyBtn = null, busyText = '';
+  function working(btn, label) {
+    busyBtn = btn; busyText = btn.textContent;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner small"></span> ' + esc(label);
+  }
+  function done() {
+    if (busyBtn) { busyBtn.disabled = false; busyBtn.textContent = busyText; }
+    busyBtn = null;
+  }
   function act(promise, okMsg, keepRef) {
     return promise.then(function (r) {
+      done();
       if (!r.ok) { T.toast(r.error); return r; }
       T.toast(okMsg + (r.emailed ? ' and emailed them' : ''));
       return reload(keepRef).then(function () { return r; });
-    });
+    }, function (e) { done(); if (e && e.message) T.toast(e.message); });
   }
   function reload(keepRef) {
     if (overview && overview.byTrip && tripData(current.id)) return refreshAll(keepRef);
@@ -432,7 +446,7 @@
     var p = T.readPerson(box.querySelector('.person'));
     var errs = T.checkPeople([{ fullName: 'x x', dob: '1970-01-01', role: 'Non-rider', mobile: '07000000000' }, p], current.startDate).map(function (e) { return e.replace('Person 2', 'New person'); });
     T.errorBox(box.querySelector('.ap-error'), errs);
-    if (errs.length) return;
+    if (errs.length) { done(); return; }
     act(admin('addPerson', { ref: ref, person: p, force: force }), p.fullName + ' added', ref).then(function (r) {
       if (r && r.needsForce) {
         var s = box.querySelector('[data-act="addperson-save"]');
@@ -449,6 +463,9 @@
         var btn = e.target.closest('[data-act]');
         if (!btn) return;
         var a = btn.getAttribute('data-act');
+        if (busyBtn) { T.toast('Still saving the last change…'); return; }
+        var sure = (a === 'cancel' || a === 'rmperson') && btn.getAttribute('data-sure') !== '1';
+        if (BUSY[a] && a !== 'addpay' && !sure) working(btn, BUSY[a]);
         if (a === 'confirm' || a === 'reject') act(admin('payment', { id: btn.getAttribute('data-id'), decision: a }), a === 'confirm' ? 'Payment confirmed' : 'Marked as not found', ref);
         else if (a === 'copylink') T.copy(b.link, btn);
         else if (a === 'addpay') { var f = d.querySelector('.addpay-form'); f.hidden = !f.hidden; }
@@ -476,6 +493,8 @@
       d.querySelector('.addpay-form').addEventListener('submit', function (e) {
         e.preventDefault();
         var f = e.target;
+        if (busyBtn) return;
+        working(f.querySelector('[type="submit"]'), BUSY.addpay);
         act(admin('addPayment', { ref: ref, amount: f.querySelector('.ap-amount').value, stage: f.querySelector('.ap-stage').value, paidOn: f.querySelector('.ap-date').value, note: f.querySelector('.ap-note').value }), 'Payment recorded', ref);
       });
     });
