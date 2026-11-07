@@ -108,9 +108,9 @@ test('same person twice and booking size limit', () => {
 });
 
 test('payment references carry the trip prefix', () => {
-  assert.strictEqual(C.payRef_({ id: 'mallorca-2027' }, 'KUTAK'), 'MALLORCA-KUTAK');
-  assert.strictEqual(C.payRef_({ id: 'rhine-2027', refPrefix: 'rh 27!' }, 'KUTAK'), 'RH27-KUTAK');
-  assert.strictEqual(C.payRef_({ id: '2027' }, 'KUTAK'), '2027-KUTAK');
+  assert.strictEqual(C.payRef_({ id: 'mallorca-2027' }, 'KUTAK'), 'MALKUTAK');
+  assert.strictEqual(C.payRef_({ id: 'rhine-2027', refPrefix: 'rh 27!' }, 'KUTAK'), 'RH27KUTAK');
+  assert.strictEqual(C.payRef_({ id: '2027' }, 'KUTAK'), '202KUTAK');
 });
 
 test('places taken counts only Booked on this trip', () => {
@@ -204,7 +204,7 @@ test('emails: deposit details when booked, none when waiting', () => {
   const cfg = { clubName: 'W/Rhinos Cycling Club', bankAccountName: 'W/Rhinos', bankSortCode: '12-34-56', bankAccountNumber: '12345678' };
   const people = [{ fullName: 'Asha Rider', role: 'Rider', under18: false }];
   const booked = C.buildRegistrationEmail_({ ref: 'RAKIM', status: 'Booked', depositDue: 100 }, people, trip, cfg, 'https://x');
-  assert.ok(/PAYMENT REFERENCE: RHINE-RAKIM/.test(booked.body) && /£100/.test(booked.body) && /https:\/\/x/.test(booked.body));
+  assert.ok(/PAYMENT REFERENCE: RHIRAKIM/.test(booked.body) && /£100/.test(booked.body) && /https:\/\/x/.test(booked.body));
   const waiting = C.buildRegistrationEmail_({ ref: 'RAKIM', status: 'Waiting list', depositDue: 100 }, people, trip, cfg, 'https://x');
   assert.ok(/WAITING LIST/.test(waiting.body) && !/PAYMENT REFERENCE/.test(waiting.body));
 });
@@ -214,7 +214,7 @@ test('payment call emails: interim states the reason, final states the totals', 
   const b = { ref: 'RAKIM', leadName: 'Asha Rider' };
   const row = { cost: 862.53, confirmed: 300, owesNow: 562.53 };
   const interim = C.buildCallEmail_(b, row, { stage: 'Interim', reason: 'Hotels need paying 6 weeks before', perPerson: 200, dueDate: '2027-04-01' }, trip, cfg, 'https://x');
-  assert.ok(/Hotels need paying/.test(interim.body) && /PLEASE PAY £562\.53 BY 2027-04-01/.test(interim.body) && /PAYMENT REFERENCE: RHINE-RAKIM/.test(interim.body));
+  assert.ok(/Hotels need paying/.test(interim.body) && /PLEASE PAY £562\.53 BY 2027-04-01/.test(interim.body) && /PAYMENT REFERENCE: RHIRAKIM/.test(interim.body));
   const fin = C.buildCallEmail_(b, row, { stage: 'Final', dueDate: '2027-06-30' }, trip, cfg, 'https://x');
   assert.ok(/Final balance/.test(fin.subject) && /Total cost for your booking: £862\.53/.test(fin.body) && /Already paid: £300/.test(fin.body));
   const rem = C.buildReminderEmail_(b, row, trip, cfg, 'https://x');

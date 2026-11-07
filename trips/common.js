@@ -620,10 +620,11 @@
     $('resetPreview').addEventListener('click', function () { try { localStorage.removeItem('wrhinos-trips-preview'); localStorage.removeItem(MINE_KEY); } catch (e) { /* */ } location.reload(); });
   }
 
-  // The bank reference: the trip's prefix and the booking reference, e.g. RHINE-KUTAK.
+  // The bank reference: the trip's prefix and the booking reference, e.g. RHIKUTAK (letters only: every bank accepts it).
   function payRef(trip, ref) {
-    var p = String((trip && trip.refPrefix) || String((trip && trip.id) || '').split('-')[0]).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
-    return p ? p + '-' + ref : ref;
+    var clean = function (v) { return String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8); };
+    var p = clean(trip && trip.refPrefix) || clean(String((trip && trip.id) || '').split('-')[0]).slice(0, 3);
+    return p + ref;
   }
 
   window.Trips = {

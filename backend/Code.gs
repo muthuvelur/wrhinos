@@ -216,10 +216,11 @@ function yesNo_(v, dflt) {
   return dflt;
 }
 
-// Each trip's payments carry its own prefix (e.g. RHINE-KUTAK, MALLORCA-KUTAK), so the bank statement sorts by trip.
+// Each trip's payments carry its own short prefix (e.g. RHIKUTAK, MALKUTAK), so the bank statement sorts by trip.
+// Letters and numbers only, with no space or dash, because every UK bank accepts those (up to 18 characters).
 function cleanPrefix_(v) { return String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8); }
-function refPrefix_(trip) { return cleanPrefix_(trip && trip.refPrefix) || cleanPrefix_(String((trip && trip.id) || '').split('-')[0]); }
-function payRef_(trip, ref) { const p = refPrefix_(trip); return p ? p + '-' + ref : ref; }
+function refPrefix_(trip) { return cleanPrefix_(trip && trip.refPrefix) || cleanPrefix_(String((trip && trip.id) || '').split('-')[0]).slice(0, 3); }
+function payRef_(trip, ref) { return refPrefix_(trip) + ref; }
 
 function validateTrip_(input, existingIds) {
   const errors = [];

@@ -212,8 +212,8 @@
       '<div class="grid2"><div class="field"><label>When is the deposit asked for?</label><select data-f="depositAtSignup">' +
         '<option value="No"' + (t.depositAtSignup !== 'Yes' ? ' selected' : '') + '>Later: sign up first, deposit once the trip is confirmed</option>' +
         '<option value="Yes"' + (t.depositAtSignup === 'Yes' ? ' selected' : '') + '>Straight away, when people sign up</option></select></div></div>' +
-      '<div class="grid2"><div class="field"><label>Payment reference prefix</label><input type="text" maxlength="8" data-f="refPrefix" value="' + esc(t.refPrefix || '') + '" placeholder="' + esc(T.payRef({ id: t.id || '' }, '').replace(/-$/, '') || 'e.g. RHINE') + '" style="text-transform:uppercase">' +
-        '<span class="hint">Put in front of everyone’s booking reference for this trip, e.g. <b>' + esc(T.payRef(t, 'KUTAK')) + '</b>, so payments sort by trip in the bank. Up to 8 letters or numbers. Leave empty to use the first word of the trip’s web name.</span></div></div>' +
+      '<div class="grid2"><div class="field"><label>Payment reference prefix</label><input type="text" maxlength="8" data-f="refPrefix" value="' + esc(t.refPrefix || '') + '" placeholder="' + esc(T.payRef({ id: t.id || '' }, '') || 'e.g. RHINE') + '" style="text-transform:uppercase">' +
+        '<span class="hint">Put in front of everyone’s booking reference for this trip, e.g. <b>' + esc(T.payRef(t, 'KUTAK')) + '</b>, so payments sort by trip in the bank. Letters and numbers only (every bank accepts those), up to 8. Leave empty to use the first 3 letters of the trip’s web name.</span></div></div>' +
       '<div class="field"><label>Bike options</label><textarea data-f="bikeOptions" rows="5">' + esc(t.bikeOptionsText || '') + '</textarea>' +
       '<span class="hint">One per line: what people choose, a | sign, then <b>hire</b> or <b>own</b>. For example: Hire a hybrid e-bike | hire. Hire riders are asked for height, inside leg, frame size, saddle height and pedals.</span></div>' +
       '<div class="field"><label>One-line summary</label><input type="text" data-f="summary" value="' + v('summary') + '"></div>' +
@@ -325,6 +325,9 @@
     var term = $('search').value.trim().toLowerCase();
     var list = bookings.filter(fn).filter(function (b) {
       if (!term) return true;
+      // A bank reference typed with a space or dash (RHINE KUTAK, RHINE-KUTAK) still finds the booking.
+      var squashed = term.replace(/[^a-z0-9]/g, '');
+      if (squashed.length >= 5 && T.payRef(current, b.ref).toLowerCase().indexOf(squashed) !== -1) return true;
       return [b.ref, T.payRef(current, b.ref), b.email, b.leadName].concat((b.persons || []).map(function (p) { return p.fullName; })).join(' ').toLowerCase().indexOf(term) !== -1;
     });
     $('bookingList').innerHTML = list.length ? list.map(bookingHtml).join('') : '<div class="card muted">Nothing here.</div>';
@@ -877,7 +880,7 @@
       'Account name: ' + (bank.accountName || ''),
       'Sort code: ' + (bank.sortCode || ''),
       'Account number: ' + (bank.accountNumber || ''),
-      'Reference: ' + T.payRef(current, '') + ' followed by your 5-letter booking reference, e.g. ' + T.payRef(current, 'KUTAK') + '. Your exact reference is on your booking page.',
+      'Reference: ' + T.payRef(current, '') + ' then your 5-letter booking reference, all together with no spaces, e.g. ' + T.payRef(current, 'KUTAK') + '. Your exact reference is on your booking page.',
       '', 'Once you have paid, open your booking page and tap "I\'ve paid" so we can check it.',
       'Lost your booking link? Get it again at ' + location.origin + '/trips/ ("Lost your booking link?").');
     return lines.join('\n');
