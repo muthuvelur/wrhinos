@@ -360,7 +360,7 @@
       : '<span class="chip ' + (b.status === 'Waiting list' ? 'warn' : '') + '">' + esc(b.status) + '</span>';
     var first = String(b.leadName).split(' ')[0];
     var waMsg = 'Hi ' + first + ', a reminder about your W/Rhinos booking for ' + current.name + ': your deposit of ' + T.money(left - b.totals.claimed) +
-      ' is due. Please pay to the club account using reference ' + T.payRef(current, b.ref) + '. Your booking page: ' + b.link;
+      ' is due. Please pay to the club account using exactly this reference: *' + T.payRef(current, b.ref) + '*. Your booking page: ' + b.link;
     return '<details class="card booking" data-ref="' + esc(b.ref) + '"><summary>' +
       '<span class="who">' + esc(b.leadName) + (b.people > 1 ? ' +' + (b.people - 1) : '') + '</span>' + chip +
       '<span class="meta">' + esc(b.ref) + ' · ' + b.people + (b.people === 1 ? ' person' : ' people') + ' · booked ' + esc(T.niceDate(b.bookedAt)) + '</span>' +
@@ -800,7 +800,7 @@
       var bi = info[b.ref] || {};
       var first = String(bi.leadName || '').split(' ')[0];
       var due = Math.max(0, Math.round((b.owesNow - b.claimed) * 100) / 100);
-      var msg = 'Hi ' + first + ', a reminder that ' + T.money(due) + ' is due for your W/Rhinos booking on ' + current.name + '. Please pay to the club account using reference ' + T.payRef(current, b.ref) + '. Your breakdown and the bank details: ' + bi.link;
+      var msg = 'Hi ' + first + ', a reminder that ' + T.money(due) + ' is due for your W/Rhinos booking on ' + current.name + '. Please pay to the club account using exactly this reference: *' + T.payRef(current, b.ref) + '*. Your breakdown and the bank details: ' + bi.link;
       return '<details class="card booking"><summary><span class="who">' + esc(bi.leadName) + (b.people.length > 1 ? ' +' + (b.people.length - 1) : '') + '</span>' +
         (b.owesNow > 0 ? '<span class="chip ' + (b.claimed >= b.owesNow ? 'warn' : 'bad') + '">' + (b.claimed >= b.owesNow ? 'Check payment' : 'Owes ' + T.money(b.owesNow)) + '</span>' : '<span class="chip ok">Up to date</span>') +
         '<span class="meta">' + esc(b.ref) + ' · cost so far ' + T.money(b.cost) + '</span><span class="meta">paid ' + T.money(b.confirmed) + '</span></summary>' +
@@ -857,33 +857,46 @@
   }
   // ---------- WhatsApp group message ----------
   // One message for the whole group: amounts per person and the club account, never anyone's own balance.
+  // Written for WhatsApp: *bold*, short lines, and the payment reference made impossible to miss.
   function groupMessage(call) {
     var bank = mon.bank || {};
     var due = call && call.dueDate ? T.niceDate(call.dueDate) : '';
-    var lines = ['W/Rhinos – ' + current.name, ''];
+    var ex = T.payRef(current, 'KUTAK');
+    var lines = ['🚴 *W/Rhinos – ' + current.name + '*', ''];
     if (call && call.stage === 'Deposit') {
-      lines.push('Great news: the trip is confirmed!', '',
-        'Next steps for everyone who has signed up:',
-        '1. Pay your deposit: ' + T.money(current.depositPerPerson) + ' per person' + (due ? ', by ' + due : '') + ' (support crew: nothing to pay). The deposit is non-refundable.',
-        '2. Open your booking page and add the rest of your details: passports, and bike make and colour if you are bringing your own bike.');
+      lines.push('🎉 *The trip is confirmed!*', '',
+        '*1. Pay your deposit*',
+        '💷 ' + T.money(current.depositPerPerson) + ' per person',
+        due ? '📅 By *' + due + '*' : null,
+        '_Support crew: nothing to pay. Deposits are non-refundable._', '',
+        '*2. Add your details*',
+        'Open your booking page and add passports, plus bike make and colour if you’re bringing your own bike.');
     } else if (call && call.stage === 'Interim') {
-      lines.push('Interim payment due: ' + T.money(call.perPerson) + ' per person' + (due ? ', by ' + due : '') + '.',
-        'Why: ' + call.reason.replace(/\.$/, '') + '.', '(Support crew: nothing to pay.)');
+      lines.push('💷 *Interim payment: ' + T.money(call.perPerson) + ' per person*', due ? '📅 By *' + due + '*' : null,
+        'Why: ' + call.reason.replace(/\.$/, '') + '.', '_Support crew: nothing to pay._');
     } else if (call && call.stage === 'Final') {
-      lines.push('Thank you all for a brilliant trip! Every cost is now in, and the final balances are ready.',
-        'Please pay your balance' + (due ? ' by ' + due : '') + '. Your booking page shows your share of each cost and exactly what is left to pay.');
+      lines.push('🙏 *Thank you all for a brilliant trip!*', '',
+        'Every cost is now in and the final balances are ready.', due ? '📅 Please pay by *' + due + '*' : 'Please pay your balance.',
+        'Your booking page shows your share of each cost and exactly what’s left to pay.');
     } else {
-      lines.push('Friendly reminder: if your booking still owes money' + (due ? ' (due by ' + due + ')' : '') + ', please pay as soon as you can.',
-        'Your booking page shows exactly what your booking owes.');
+      lines.push('⏰ *Friendly reminder*', '',
+        'If your booking still owes money, please pay as soon as you can' + (due ? ' (it was due by *' + due + '*)' : '') + '.',
+        'Your booking page shows exactly what you owe.');
     }
-    lines.push('', 'Pay by bank transfer:',
-      'Account name: ' + (bank.accountName || ''),
+    lines.push('', '🏦 *Bank transfer*',
+      'Name: ' + (bank.accountName || ''),
       'Sort code: ' + (bank.sortCode || ''),
-      'Account number: ' + (bank.accountNumber || ''),
-      'Reference: ' + T.payRef(current, '') + ' then your 5-letter booking reference, all together with no spaces, e.g. ' + T.payRef(current, 'KUTAK') + '. Your exact reference is on your booking page.',
-      '', 'Once you have paid, open your booking page and tap "I\'ve paid" so we can check it.',
-      'Lost your booking link? Get it again at ' + location.origin + '/trips/ ("Lost your booking link?").');
-    return lines.join('\n');
+      'Account: ' + (bank.accountNumber || ''),
+      'One transfer per booking, covering everyone in it.', '',
+      '⚠️ *REFERENCE: PLEASE USE EXACTLY THIS*',
+      '*' + T.payRef(current, '') + '* + your 5-letter booking reference, no spaces',
+      'e.g. *' + ex + '*',
+      'This is how we match your payment to your booking. Without it we can’t tell who has paid, and your booking will still show as unpaid.',
+      'Your exact reference is on your booking page.', '',
+      '✅ *After paying*',
+      'Open your booking page and tap *“I’ve paid”*.', '',
+      '🔗 Lost your booking link? ' + location.origin + '/trips/ → “Lost your booking link?”');
+    return lines.filter(function (l) { return l !== null; }).join('\n');
   }
   function showGroupMessage(text) {
     $('groupMsg').value = text;
