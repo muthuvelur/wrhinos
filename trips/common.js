@@ -566,6 +566,7 @@
               save(db); return { ok: true, emailed: 0 };
             }
             if (body.op === 'remind') return { ok: true, emailed: 0 };
+            if (body.op === 'emailCall') { var cl = db.calls.filter(function (x) { return x.id === body.id; })[0]; if (!cl) return { ok: false, error: 'That payment request no longer exists.' }; cl.emailed = String((Number(cl.emailed) || 0) + 0); save(db); return { ok: true, emailed: 0 }; }
           }
           var addP = function (bk, person, force) {
             var tt = db.trips.filter(function (x) { return x.id === bk.tripId; })[0];

@@ -496,6 +496,7 @@ function buildCallEmail_(b, row, call, trip, cfg, link) {
   return {
     subject: (call.stage === 'Deposit' ? 'Trip confirmed, deposit due: ' : final ? 'Final balance: ' : 'Payment due: ') + trip.name + ' (' + b.ref + ')',
     body: lines.concat(payLines_(row.owesNow, payRef_(trip, b.ref), cfg), ['',
+      'Please use exactly this reference: ' + payRef_(trip, b.ref) + '. It is how we match your payment to your booking; without it we cannot tell who has paid.', '',
       'Your booking page shows exactly what each cost was and your share of it:', link, '',
       'Once you have paid, tap "I\'ve paid" on that page.', '', cfg.clubName]).join('\n'),
   };
@@ -1153,7 +1154,7 @@ function checkPasscode_(pass) {
 
 // Changes made on the organiser page. With withOverview, the reply also carries the refreshed overview,
 // so the page needs one slow Google round trip per change instead of two.
-const WRITE_OPS = ['saveTrip', 'payment', 'addPayment', 'setStatus', 'saveNotes', 'addPerson', 'removePerson', 'saveExpense', 'deleteExpense', 'call'];
+const WRITE_OPS = ['saveTrip', 'payment', 'addPayment', 'setStatus', 'saveNotes', 'addPerson', 'removePerson', 'saveExpense', 'deleteExpense', 'call', 'emailCall'];
 
 function overview_(cfg) {
   const all = readAll_();
@@ -1171,6 +1172,20 @@ function admin_(input) {
     try { r.overview = overview_(cfg); } catch (e) { console.error('Overview after ' + input.op + ': ' + e); }
   }
   return r;
+}
+
+// Emails a payment request to every booking that owes money, and records how many were sent.
+function emailCall_(trip, call, cfg) {
+  let sent = 0;
+  const m = tripMoney_(trip);
+  m.bookings.forEach(function (b) {
+    const row = m.result.bookings.filter(function (x) { return x.ref === b.ref; })[0];
+    if (b.status !== 'Booked' || !row || !(row.owesNow > row.claimed)) return;
+    if (sendMail_(b.email, buildCallEmail_(b, row, call, trip, cfg, bookingLink_(cfg.siteUrl, b.ref, b.token)))) sent++;
+  });
+  const saved = readTable_('Calls').filter(function (c) { return c.id === call.id; })[0];
+  if (saved) updateRow_('Calls', saved._row, Object.assign({}, saved, { emailed: String((Number(saved.emailed) || 0) + sent) }));
+  return sent;
 }
 
 function adminOp_(input, cfg) {
@@ -1306,18 +1321,16 @@ function adminOp_(input, cfg) {
       if (stage === 'Final' && readTable_('Calls').some(function (c) { return c.tripId === trip.id && c.stage === 'Final'; })) return { ok: false, error: 'The final balance has already been called. Use "Remind everyone who owes" instead.' };
       if (!call.dueDate) return { ok: false, error: 'Choose the date it is due by.' };
       appendRows_('Calls', [call]);
-      let sent = 0;
-      if (input.email !== false) {
-        const m = tripMoney_(trip);
-        m.bookings.forEach(function (b) {
-          const row = m.result.bookings.filter(function (x) { return x.ref === b.ref; })[0];
-          if (b.status !== 'Booked' || !row || !(row.owesNow > row.claimed)) return;
-          if (sendMail_(b.email, buildCallEmail_(b, row, call, trip, cfg, bookingLink_(cfg.siteUrl, b.ref, b.token)))) sent++;
-        });
-        const saved = readTable_('Calls').filter(function (c) { return c.id === call.id; })[0];
-        if (saved) updateRow_('Calls', saved._row, Object.assign({}, saved, { emailed: String(sent) }));
-      }
-      return { ok: true, emailed: sent };
+      return { ok: true, emailed: input.email !== false ? emailCall_(trip, call, cfg) : 0 };
+    }
+    // Email a payment request that was first posted in the WhatsApp group.
+    case 'emailCall': {
+      const trip = tripById_(String(input.tripId || ''));
+      if (!trip) return { ok: false, error: 'Trip not found.' };
+      const call = readTable_('Calls').filter(function (c) { return c.id === input.id && c.tripId === trip.id; })[0];
+      if (!call) return { ok: false, error: 'That payment request no longer exists. Reload the page.' };
+      if (call.emailed !== '' && input.again !== true) return { ok: false, needsForce: true, error: 'This request was already emailed (' + call.emailed + ' emails). Send it again?' };
+      return { ok: true, emailed: emailCall_(trip, call, cfg) };
     }
     case 'remind': {
       const trip = tripById_(String(input.tripId || ''));

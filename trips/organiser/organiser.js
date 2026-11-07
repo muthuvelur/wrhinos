@@ -13,7 +13,7 @@
   try { pass = store.getItem('wrhinos-org') || sessionStorage.getItem('wrhinos-org') || ''; } catch (e) { /* */ }
 
   // Changes ask Google to send the refreshed data back in the same reply, so there's one wait, not two.
-  var WRITE_OPS = ['saveTrip', 'payment', 'addPayment', 'setStatus', 'saveNotes', 'addPerson', 'removePerson', 'saveExpense', 'deleteExpense', 'call'];
+  var WRITE_OPS = ['saveTrip', 'payment', 'addPayment', 'setStatus', 'saveNotes', 'addPerson', 'removePerson', 'saveExpense', 'deleteExpense', 'call', 'emailCall'];
   var nextOverview = null;
   function admin(op, extra) {
     var body = Object.assign({ action: 'admin', op: op, pass: pass }, extra || {});
@@ -785,7 +785,8 @@
       [T.money(r.totals.owesNow), 'Owed now'],
     ]);
     $('callList').innerHTML = mon.calls.length ? '<table class="plain"><thead><tr><th>Called</th><th>What</th><th>Due by</th><th>Emails</th></tr></thead><tbody>' + mon.calls.map(function (c) {
-      return '<tr><td>' + esc(T.niceDate(c.createdAt)) + '</td><td>' + (c.stage === 'Deposit' ? '<b>Deposits and details</b>' : c.stage === 'Final' ? '<b>Final balance</b>' : '<b>Interim</b> ' + T.money(c.perPerson) + ' per person<br><span class="muted">' + esc(c.reason) + '</span>') + '</td><td>' + esc(T.niceDate(c.dueDate)) + '</td><td>' + esc(c.emailed || '–') + '</td></tr>';
+      return '<tr><td>' + esc(T.niceDate(c.createdAt)) + '</td><td>' + (c.stage === 'Deposit' ? '<b>Deposits and details</b>' : c.stage === 'Final' ? '<b>Final balance</b>' : '<b>Interim</b> ' + T.money(c.perPerson) + ' per person<br><span class="muted">' + esc(c.reason) + '</span>') + '</td><td>' + esc(T.niceDate(c.dueDate)) + '</td><td>' + (c.emailed ? esc(c.emailed) + ' sent ' : '') +
+        '<button type="button" class="linkbtn small" data-email-call="' + esc(c.id) + '"' + (c.emailed ? ' data-again="1">Email again' : '>Email it') + '</button></td></tr>';
     }).join('') + '</tbody></table>' : '<p class="muted" style="margin:0">' + (r.depositAsked ? 'Only the deposit has been asked for so far.' : 'Nothing asked for yet: people have signed up and their places are held. When the trip is confirmed, tap “Ask for deposits and details”.') + '</p>';
     $('callDeposit').hidden = r.depositAsked || r.finalCalled;
     $('callFinal').hidden = r.finalCalled;
@@ -846,9 +847,8 @@
         '<div class="field"><label for="cfReason">Reason</label><input type="text" id="cfReason" placeholder="e.g. Hotels need paying 6 weeks before we go"></div>'
       : '<p class="small" style="margin:0">Do this after the trip, once every cost is entered. Everyone is asked for their full share less what they have paid. You can still add or change expenses afterwards; balances update.</p>' +
         '<div class="field"><label for="cfDue">Due by</label><input type="date" id="cfDue" value="' + nextMonth + '"></div>') +
-      '<fieldset class="stack"><legend class="label" style="font-weight:600">Then</legend>' +
-      '<label class="check"><input type="radio" name="cfHow" value="group" checked>Write a message I can post in the WhatsApp group</label>' +
-      '<label class="check"><input type="radio" name="cfHow" value="email">Email everyone who owes their own amount and the bank details</label></fieldset>' +
+      '<p class="small" style="margin:0">You’ll get a WhatsApp message to copy into the group. Emails go out only when you choose: tick below, or press “Email it” next to the request later.</p>' +
+      '<label class="check"><input type="checkbox" id="cfEmail">Also email everyone who owes now (their own amount and the bank details)</label>' +
       '<div class="error" id="cfError" hidden></div>' +
       '<div class="row"><button type="submit" class="btn btn-primary">' + (stage === 'Deposit' ? 'Ask for deposits and details' : stage === 'Interim' ? 'Call interim payment' : 'Call final balance') + '</button><button type="button" class="btn btn-line" id="cfCancel">Cancel</button></div>';
     f.hidden = false;
@@ -916,14 +916,32 @@
     showGroupMessage(groupMessage(last ? { stage: 'Reminder', dueDate: last.dueDate } : null));
   });
 
+  // Email a request that was posted in WhatsApp first. Asks before sending a second time.
+  $('callList').addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-email-call]');
+    if (!btn) return;
+    if (busyBtn) { T.toast('Still saving the last change…'); return; }
+    if (btn.getAttribute('data-sure') !== '1') {
+      btn.setAttribute('data-sure', '1');
+      btn.textContent = btn.getAttribute('data-again') ? 'Tap again to email everyone again' : 'Tap again to email everyone who owes';
+      return;
+    }
+    working(btn, 'Emailing…');
+    admin('emailCall', { tripId: current.id, id: btn.getAttribute('data-email-call'), again: !!btn.getAttribute('data-again') }).then(function (r) {
+      done();
+      if (!r.ok) { T.toast(r.error); return; }
+      T.toast(T.DEMO ? 'Preview: no emails sent' : r.emailed + ' emails sent');
+      return loadMoney(true);
+    }, function (err) { done(); if (err && err.message) T.toast(err.message); });
+  });
   $('callDeposit').addEventListener('click', function () { callForm('Deposit'); });
   $('callInterim').addEventListener('click', function () { callForm('Interim'); });
   $('callFinal').addEventListener('click', function () { callForm('Final'); });
   $('callForm').addEventListener('submit', function (e) {
     e.preventDefault();
     var f = this, stage = f.dataset.stage;
-    var how = (f.querySelector('[name=cfHow]:checked') || {}).value;
-    var body = { tripId: current.id, stage: stage, dueDate: $('cfDue').value, email: how === 'email' };
+    var emailNow = $('cfEmail').checked;
+    var body = { tripId: current.id, stage: stage, dueDate: $('cfDue').value, email: emailNow };
     if (stage === 'Interim') { body.perPerson = Number(String($('cfPer').value).replace(/[£,\s]/g, '')); body.reason = $('cfReason').value.trim(); }
     var btn = f.querySelector('[type=submit]');
     btn.disabled = true;
@@ -932,8 +950,8 @@
       f.hidden = true;
       if (stage === 'Deposit') current.depositAsked = true;
       T.toast((stage === 'Deposit' ? 'Deposits asked for' : stage === 'Final' ? 'Final balance called' : 'Interim payment called') +
-        (how === 'email' ? (T.DEMO ? ' (preview: no emails sent)' : ', ' + r.emailed + ' emails sent') : ''));
-      return loadMoney(true).then(function () { if (how === 'group') showGroupMessage(groupMessage(body)); });
+        (emailNow ? (T.DEMO ? ' (preview: no emails sent)' : ', ' + r.emailed + ' emails sent') : ''));
+      return loadMoney(true).then(function () { showGroupMessage(groupMessage(body)); });
     }).catch(function () { /* */ }).then(function () { btn.disabled = false; });
   });
 
