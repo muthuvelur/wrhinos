@@ -838,8 +838,9 @@
     var nextMonth = new Date(Date.now() + 28 * 86400000).toISOString().slice(0, 10);
     var inAWeek = new Date(Date.now() + (current.depositDays || 7) * 86400000).toISOString().slice(0, 10);
     f.innerHTML = (stage === 'Deposit'
-      ? '<p class="small" style="margin:0">Do this once the trip is confirmed. Everyone booked is asked for the deposit (' + T.money(current.depositPerPerson) + ' per person, none for support crew), and their booking page asks for the rest of their details: passports, and bike details for anyone bringing their own.</p>' +
-        '<div class="field"><label for="cfDue">Deposit due by</label><input type="date" id="cfDue" value="' + inAWeek + '"></div>'
+      ? '<p class="small" style="margin:0">Do this once the trip is confirmed. Everyone booked is asked for the deposit per person below (support crew pay none), and their booking page asks for the rest of their details: passports, and bike details for anyone bringing their own.</p>' +
+        '<div class="grid2"><div class="field"><label for="cfPer">Deposit per person (£)</label><input type="text" inputmode="decimal" id="cfPer" value="' + esc(current.depositPerPerson) + '"><span class="hint">Change it here if needed: every booking’s deposit is worked out again.</span></div>' +
+        '<div class="field"><label for="cfDue">Deposit due by</label><input type="date" id="cfDue" value="' + inAWeek + '"></div></div>'
       : stage === 'Interim'
       ? '<p class="small" style="margin:0">Ask everyone (except support crew) for a set amount per person, for example when a hotel needs paying before the trip. The Framework asks us to say why.</p>' +
         '<div class="grid2"><div class="field"><label for="cfPer">Amount per person (£)</label><input type="text" inputmode="decimal" id="cfPer"></div>' +
@@ -847,6 +848,7 @@
         '<div class="field"><label for="cfReason">Reason</label><input type="text" id="cfReason" placeholder="e.g. Hotels need paying 6 weeks before we go"></div>'
       : '<p class="small" style="margin:0">Do this after the trip, once every cost is entered. Everyone is asked for their full share less what they have paid. You can still add or change expenses afterwards; balances update.</p>' +
         '<div class="field"><label for="cfDue">Due by</label><input type="date" id="cfDue" value="' + nextMonth + '"></div>') +
+      (stage === 'Final' ? '' : '<div class="notice small" id="cfSummary"></div>') +
       '<p class="small" style="margin:0">You’ll get a WhatsApp message to copy into the group. Emails go out only when you choose: tick below, or press “Email it” next to the request later.</p>' +
       '<label class="check"><input type="checkbox" id="cfEmail">Also email everyone who owes now (their own amount and the bank details)</label>' +
       '<div class="error" id="cfError" hidden></div>' +
@@ -854,6 +856,31 @@
     f.hidden = false;
     f.dataset.stage = stage;
     $('cfCancel').addEventListener('click', function () { f.hidden = true; });
+    if (stage !== 'Final') {
+      callSummary(stage);
+      if ($('cfPer')) $('cfPer').addEventListener('input', function () { callSummary(stage); });
+    }
+  }
+  // Before asking, show exactly what will be asked for: the total, and each booking's amount.
+  function callSummary(stage) {
+    var per = Number(String($('cfPer').value).replace(/[£,\s]/g, '')) || 0;
+    var rows = bookings.filter(function (b) { return b.status === 'Booked'; }).map(function (b) {
+      var payers = placesFor(b), amount = payers * per;
+      if (stage === 'Deposit') amount = Math.max(0, amount - b.totals.confirmed);
+      return { b: b, payers: payers, amount: amount };
+    });
+    var people = rows.reduce(function (a, r) { return a + r.payers; }, 0);
+    var total = rows.reduce(function (a, r) { return a + r.amount; }, 0);
+    var support = bookings.filter(function (b) { return b.status === 'Booked'; }).reduce(function (a, b) { return a + supportIn(b); }, 0);
+    var paying = rows.filter(function (r) { return r.amount > 0; });
+    $('cfSummary').innerHTML = !per ? 'Enter the amount per person to see the total.'
+      : '<b>This asks for ' + T.money(total) + ' in total</b> from ' + paying.length + ' booking' + (paying.length === 1 ? '' : 's') +
+        ' (' + people + ' people × ' + T.money(per) + (stage === 'Deposit' && total < people * per ? ', less deposits already paid' : '') + ').' +
+        (support ? ' ' + support + ' support crew pay nothing.' : '') + ' Waiting list and cancelled bookings aren’t asked.' +
+        '<details style="margin-top:6px"><summary>See each booking’s amount</summary><table class="plain" style="margin-top:6px"><tbody>' +
+        rows.map(function (r) {
+          return '<tr><td>' + esc(r.b.leadName) + (r.b.people > 1 ? ' +' + (r.b.people - 1) : '') + '<br><span class="muted">' + esc(T.payRef(current, r.b.ref)) + ' · ' + r.payers + (r.payers === 1 ? ' person' : ' people') + '</span></td><td style="text-align:right"><b>' + T.money(r.amount) + '</b></td></tr>';
+        }).join('') + '</tbody></table></details>';
   }
   // ---------- WhatsApp group message ----------
   // One message for the whole group: amounts per person and the club account, never anyone's own balance.
@@ -866,7 +893,7 @@
     if (call && call.stage === 'Deposit') {
       lines.push('🎉 *The trip is confirmed!*', '',
         '*1. Pay your deposit*',
-        '💷 ' + T.money(current.depositPerPerson) + ' per person',
+        '💷 ' + T.money(call.perPerson || current.depositPerPerson) + ' per person',
         due ? '📅 By *' + due + '*' : null,
         '_Support crew: nothing to pay. Deposits are non-refundable._', '',
         '*2. Add your details*',
@@ -942,13 +969,15 @@
     var f = this, stage = f.dataset.stage;
     var emailNow = $('cfEmail').checked;
     var body = { tripId: current.id, stage: stage, dueDate: $('cfDue').value, email: emailNow };
-    if (stage === 'Interim') { body.perPerson = Number(String($('cfPer').value).replace(/[£,\s]/g, '')); body.reason = $('cfReason').value.trim(); }
+    if (stage !== 'Final') body.perPerson = Number(String($('cfPer').value).replace(/[£,\s]/g, ''));
+    if (stage === 'Interim') body.reason = $('cfReason').value.trim();
+    if (stage === 'Deposit' && !(body.perPerson >= 0 && String($('cfPer').value).trim())) { T.errorBox($('cfError'), ['Enter the deposit per person, e.g. 100.']); return; }
     var btn = f.querySelector('[type=submit]');
     btn.disabled = true;
     admin('call', body).then(function (r) {
       if (!r.ok) { T.errorBox($('cfError'), [r.error]); return; }
       f.hidden = true;
-      if (stage === 'Deposit') current.depositAsked = true;
+      if (stage === 'Deposit') { current.depositAsked = true; current.depositPerPerson = body.perPerson; }
       T.toast((stage === 'Deposit' ? 'Deposits asked for' : stage === 'Final' ? 'Final balance called' : 'Interim payment called') +
         (emailNow ? (T.DEMO ? ' (preview: no emails sent)' : ', ' + r.emailed + ' emails sent') : ''));
       return loadMoney(true).then(function () { showGroupMessage(groupMessage(body)); });

@@ -1174,6 +1174,19 @@ function admin_(input) {
   return r;
 }
 
+// Sets the trip's deposit per person and recalculates every booking's deposit to match (support crew pay none).
+function setDeposit_(trip, perPerson) {
+  if (round2_(Number(trip.depositPerPerson) || 0) !== perPerson) {
+    updateRow_('Trips', trip._row, Object.assign({}, trip, { depositPerPerson: perPerson, updatedAt: new Date().toISOString() }));
+    trip.depositPerPerson = perPerson;
+  }
+  const people = readTable_('People').filter(function (p) { return p.tripId === trip.id; });
+  readTable_('Bookings').filter(function (b) { return b.tripId === trip.id; }).forEach(function (b) {
+    const due = depositFor_(people.filter(function (p) { return p.ref === b.ref; }), perPerson);
+    if (Number(b.depositDue) !== due) updateRow_('Bookings', b._row, Object.assign({}, b, { depositDue: due }));
+  });
+}
+
 // Emails a payment request to every booking that owes money, and records how many were sent.
 function emailCall_(trip, call, cfg) {
   let sent = 0;
@@ -1320,6 +1333,12 @@ function adminOp_(input, cfg) {
       if (stage === 'Interim' && (!(call.perPerson > 0) || call.reason.length < 3)) return { ok: false, error: 'An interim payment needs an amount per person and a reason, e.g. "Hotels need paying 6 weeks before".' };
       if (stage === 'Final' && readTable_('Calls').some(function (c) { return c.tripId === trip.id && c.stage === 'Final'; })) return { ok: false, error: 'The final balance has already been called. Use "Remind everyone who owes" instead.' };
       if (!call.dueDate) return { ok: false, error: 'Choose the date it is due by.' };
+      if (stage === 'Deposit') {
+        if (input.perPerson !== undefined && input.perPerson !== '') {
+          if (!(call.perPerson >= 0 && call.perPerson <= 5000)) return { ok: false, error: 'The deposit per person must be from £0 to £5,000.' };
+          setDeposit_(trip, call.perPerson);
+        } else call.perPerson = round2_(Number(trip.depositPerPerson) || 0);
+      }
       appendRows_('Calls', [call]);
       return { ok: true, emailed: input.email !== false ? emailCall_(trip, call, cfg) : 0 };
     }

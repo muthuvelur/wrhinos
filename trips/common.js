@@ -562,6 +562,10 @@
               if (body.stage === 'Deposit' && db.calls.some(function (c) { return c.tripId === t.id && c.stage === 'Deposit'; })) return { ok: false, error: 'Deposits have already been asked for.' };
               if (body.stage === 'Final' && db.calls.some(function (c) { return c.tripId === t.id && c.stage === 'Final'; })) return { ok: false, error: 'The final balance has already been called.' };
               if (!body.dueDate) return { ok: false, error: 'Choose the date it is due by.' };
+              if (body.stage === 'Deposit' && body.perPerson !== undefined) {
+                t.depositPerPerson = +body.perPerson;
+                db.bookings.forEach(function (bb) { if (bb.tripId === t.id) bb.depositDue = needs(bb.persons || []) * t.depositPerPerson; });
+              }
               db.calls.push({ id: uid(8), tripId: t.id, stage: body.stage, reason: body.reason || '', perPerson: +body.perPerson || 0, dueDate: body.dueDate, createdAt: new Date().toISOString() });
               save(db); return { ok: true, emailed: 0 };
             }
