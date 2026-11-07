@@ -494,7 +494,7 @@ function buildCallEmail_(b, row, call, trip, cfg, link) {
   }
   lines.push('', 'PLEASE PAY ' + money_(row.owesNow) + (call.dueDate ? ' BY ' + call.dueDate : '') + ', BY BANK TRANSFER');
   return {
-    subject: (call.stage === 'Deposit' ? 'Trip confirmed, deposit due: ' : final ? 'Final balance: ' : 'Payment due: ') + trip.name + ' (' + b.ref + ')',
+    subject: (call.stage === 'Deposit' ? 'Trip confirmed, deposit due: ' : final ? 'Final balance: ' : 'Payment due: ') + trip.name + ' (ref ' + payRef_(trip, b.ref) + ')',
     body: lines.concat(payLines_(row.owesNow, payRef_(trip, b.ref), cfg), ['',
       'Please use exactly this reference: ' + payRef_(trip, b.ref) + '. It is how we match your payment to your booking; without it we cannot tell who has paid.', '',
       'Your booking page shows exactly what each cost was and your share of it:', link, '',
@@ -504,10 +504,11 @@ function buildCallEmail_(b, row, call, trip, cfg, link) {
 
 function buildReminderEmail_(b, row, trip, cfg, link) {
   return {
-    subject: 'Reminder: payment due for ' + trip.name + ' (' + b.ref + ')',
+    subject: 'Reminder: payment due for ' + trip.name + ' (ref ' + payRef_(trip, b.ref) + ')',
     body: ['Hello ' + String(b.leadName).split(' ')[0] + ',', '',
       'A friendly reminder that ' + money_(row.owesNow) + ' is due for your booking on ' + trip.name + '.', '']
       .concat(payLines_(row.owesNow, payRef_(trip, b.ref), cfg), ['',
+        'Please use exactly this reference: ' + payRef_(trip, b.ref) + '. It is how we match your payment to your booking.', '',
         'If you have already paid, tap "I\'ve paid" on your booking page so we can match it:', link, '',
         'Any questions, just reply to this email.', '', cfg.clubName]).join('\n'),
   };
