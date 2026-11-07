@@ -363,7 +363,7 @@
       ' is due. Please pay to the club account using exactly this reference: *' + T.payRef(current, b.ref) + '*. Your booking page: ' + b.link;
     return '<details class="card booking" data-ref="' + esc(b.ref) + '"><summary>' +
       '<span class="who">' + esc(b.leadName) + (b.people > 1 ? ' +' + (b.people - 1) : '') + '</span>' + chip +
-      '<span class="meta">' + esc(b.ref) + ' · ' + b.people + (b.people === 1 ? ' person' : ' people') + ' · booked ' + esc(T.niceDate(b.bookedAt)) + '</span>' +
+      '<span class="meta">' + esc(T.payRef(current, b.ref)) + ' · ' + b.people + (b.people === 1 ? ' person' : ' people') + ' · booked ' + esc(T.niceDate(b.bookedAt)) + '</span>' +
       '<span class="meta">' + T.money(b.totals.confirmed) + ' of ' + T.money(b.depositDue) + '</span></summary>' +
       '<div class="body">' +
       (b.organiserNotes ? '<div class="notice small">' + esc(b.organiserNotes) + '</div>' : '') +
@@ -804,7 +804,7 @@
       var msg = 'Hi ' + first + ', a reminder that ' + T.money(due) + ' is due for your W/Rhinos booking on ' + current.name + '. Please pay to the club account using exactly this reference: *' + T.payRef(current, b.ref) + '*. Your breakdown and the bank details: ' + bi.link;
       return '<details class="card booking"><summary><span class="who">' + esc(bi.leadName) + (b.people.length > 1 ? ' +' + (b.people.length - 1) : '') + '</span>' +
         (b.owesNow > 0 ? '<span class="chip ' + (b.claimed >= b.owesNow ? 'warn' : 'bad') + '">' + (b.claimed >= b.owesNow ? 'Check payment' : 'Owes ' + T.money(b.owesNow)) + '</span>' : '<span class="chip ok">Up to date</span>') +
-        '<span class="meta">' + esc(b.ref) + ' · cost so far ' + T.money(b.cost) + '</span><span class="meta">paid ' + T.money(b.confirmed) + '</span></summary>' +
+        '<span class="meta">' + esc(T.payRef(current, b.ref)) + ' · cost so far ' + T.money(b.cost) + '</span><span class="meta">paid ' + T.money(b.confirmed) + '</span></summary>' +
         '<div class="body">' + b.people.map(function (p) {
           return '<div><b>' + esc(p.name) + '</b> <span class="small muted">' + esc(p.role) + '</span><table class="plain">' + p.lines.map(function (l) {
             return '<tr><td>' + esc(l.name) + '</td><td style="text-align:right">' + T.money(l.amount) + '</td></tr>'; }).join('') +
