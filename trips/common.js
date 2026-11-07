@@ -620,11 +620,17 @@
     $('resetPreview').addEventListener('click', function () { try { localStorage.removeItem('wrhinos-trips-preview'); localStorage.removeItem(MINE_KEY); } catch (e) { /* */ } location.reload(); });
   }
 
+  // The bank reference: the trip's prefix and the booking reference, e.g. RHINE-KUTAK.
+  function payRef(trip, ref) {
+    var p = String((trip && trip.refPrefix) || String((trip && trip.id) || '').split('-')[0]).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+    return p ? p + '-' + ref : ref;
+  }
+
   window.Trips = {
     DEMO: DEMO, api: api, $: $, esc: esc, money: money, today: today, niceDate: niceDate, ageOn: ageOn, waLink: waLink,
     markdown: markdown, toast: toast, copy: copy, errorBox: errorBox, myBookings: myBookings, rememberBooking: rememberBooking, forgetBooking: forgetBooking,
     personHtml: personHtml, readPerson: readPerson, wirePerson: wirePerson, checkPeople: checkPeople, demoBanner: demoBanner,
-    markRequired: markRequired, flagEmptyRequired: flagEmptyRequired,
+    markRequired: markRequired, flagEmptyRequired: flagEmptyRequired, payRef: payRef,
     ROLES: ROLES, BIKE_TYPES: BIKE_TYPES, STAGES: STAGES,
   };
 })();

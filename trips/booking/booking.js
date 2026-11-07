@@ -54,7 +54,7 @@
       : left > 0
       ? (finalCalled ? 'This is your final balance: your share of what the trip actually cost, less what you have paid.'
         : mo && mo.calls.length ? 'Please pay the amount above by the due date.' : 'Please pay your deposit within ' + t.depositDays + ' days of registering.') +
-        ' Use your reference so we can find it, then tap “I’ve paid”.'
+        ' Use the payment reference above so we can find it, then tap “I’ve paid”.'
       : r.totals.claimed
         ? 'Thanks. The organiser will check your payment against the bank statement, then it moves to “Paid and checked”.'
         : finalCalled ? 'All paid, thank you!' : 'You’re up to date, thank you. Any interim or final payment will appear here when the organiser asks for it.';
@@ -82,8 +82,9 @@
     $('pName').textContent = r.bank.accountName;
     $('pSort').textContent = r.bank.sortCode;
     $('pAcc').textContent = r.bank.accountNumber;
-    $('pRef').textContent = b.ref;
-    copyValues = { name: r.bank.accountName, sort: String(r.bank.sortCode).replace(/\D/g, ''), account: String(r.bank.accountNumber).replace(/\D/g, ''), ref: b.ref };
+    var bankRef = b.payRef || T.payRef(t, b.ref);
+    $('pRef').textContent = bankRef;
+    copyValues = { name: r.bank.accountName, sort: String(r.bank.sortCode).replace(/\D/g, ''), account: String(r.bank.accountNumber).replace(/\D/g, ''), ref: bankRef };
     $('cAmount').value = left > 0 ? String(left) : '';
     $('cStage').innerHTML = T.STAGES.map(function (s) { return '<option>' + s + '</option>'; }).join('');
     $('cStage').value = finalCalled ? 'Final' : mo && mo.calls.some(function (c) { return c.stage === 'Interim'; }) && r.totals.confirmed >= b.depositDue ? 'Interim' : 'Deposit';

@@ -57,7 +57,7 @@ const TABLES = {
     ['places', 'Places'], ['depositPerPerson', 'Deposit per person (£)'], ['depositDays', 'Days to pay deposit'],
     ['summary', 'One-line summary'], ['details', 'Trip details'], ['routes', 'Route links'], ['organiser', 'Organiser'],
     ['createdAt', 'Created'], ['updatedAt', 'Updated'], ['charityFee', 'Charity fee per rider (£)'],
-    ['depositAtSignup', 'Deposit at sign-up?'], ['bikeOptions', 'Bike options'],
+    ['depositAtSignup', 'Deposit at sign-up?'], ['bikeOptions', 'Bike options'], ['refPrefix', 'Payment reference prefix'],
   ],
   Expenses: [
     ['id', 'Expense ID'], ['tripId', 'Trip ID'], ['name', 'Expense'], ['split', 'How shared'], ['amount', 'Amount (£)'],
@@ -216,6 +216,11 @@ function yesNo_(v, dflt) {
   return dflt;
 }
 
+// Each trip's payments carry its own prefix (e.g. RHINE-KUTAK, MALLORCA-KUTAK), so the bank statement sorts by trip.
+function cleanPrefix_(v) { return String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8); }
+function refPrefix_(trip) { return cleanPrefix_(trip && trip.refPrefix) || cleanPrefix_(String((trip && trip.id) || '').split('-')[0]); }
+function payRef_(trip, ref) { const p = refPrefix_(trip); return p ? p + '-' + ref : ref; }
+
 function validateTrip_(input, existingIds) {
   const errors = [];
   input = input || {};
@@ -235,6 +240,7 @@ function validateTrip_(input, existingIds) {
     charityFee: input.charityFee === undefined || input.charityFee === '' ? 50 : Number(input.charityFee),
     depositAtSignup: yesNo_(input.depositAtSignup, 'No'),
     bikeOptions: cleanMulti_(input.bikeOptions, 2000),
+    refPrefix: cleanPrefix_(input.refPrefix),
   };
   if (t.name.length < 3) errors.push('Give the trip a name.');
   if (isNaN(t.charityFee) || t.charityFee < 0 || t.charityFee > 500) errors.push('The charity fee per rider must be from £0 to £500.');
@@ -423,7 +429,7 @@ function buildRegistrationEmail_(b, people, trip, cfg, link) {
       '  Account name:      ' + cfg.bankAccountName,
       '  Sort code:         ' + cfg.bankSortCode,
       '  Account number:    ' + cfg.bankAccountNumber,
-      '  PAYMENT REFERENCE: ' + b.ref,
+      '  PAYMENT REFERENCE: ' + payRef_(trip, b.ref),
       '',
       'Use exactly this reference so we can find your payment. The deposit is non-refundable.',
       'Once you have paid, open your booking page and tap "I\'ve paid".');
@@ -457,7 +463,7 @@ function buildPlaceOfferedEmail_(b, trip, cfg, link) {
       '  Account name:      ' + cfg.bankAccountName,
       '  Sort code:         ' + cfg.bankSortCode,
       '  Account number:    ' + cfg.bankAccountNumber,
-      '  PAYMENT REFERENCE: ' + b.ref, '',
+      '  PAYMENT REFERENCE: ' + payRef_(trip, b.ref), '',
       'Your booking page:', link, '',
       'If you can no longer come, please reply so we can offer the place to someone else.', '', cfg.clubName].join('\n'),
   };
@@ -488,7 +494,7 @@ function buildCallEmail_(b, row, call, trip, cfg, link) {
   lines.push('', 'PLEASE PAY ' + money_(row.owesNow) + (call.dueDate ? ' BY ' + call.dueDate : '') + ', BY BANK TRANSFER');
   return {
     subject: (call.stage === 'Deposit' ? 'Trip confirmed, deposit due: ' : final ? 'Final balance: ' : 'Payment due: ') + trip.name + ' (' + b.ref + ')',
-    body: lines.concat(payLines_(row.owesNow, b.ref, cfg), ['',
+    body: lines.concat(payLines_(row.owesNow, payRef_(trip, b.ref), cfg), ['',
       'Your booking page shows exactly what each cost was and your share of it:', link, '',
       'Once you have paid, tap "I\'ve paid" on that page.', '', cfg.clubName]).join('\n'),
   };
@@ -499,7 +505,7 @@ function buildReminderEmail_(b, row, trip, cfg, link) {
     subject: 'Reminder: payment due for ' + trip.name + ' (' + b.ref + ')',
     body: ['Hello ' + String(b.leadName).split(' ')[0] + ',', '',
       'A friendly reminder that ' + money_(row.owesNow) + ' is due for your booking on ' + trip.name + '.', '']
-      .concat(payLines_(row.owesNow, b.ref, cfg), ['',
+      .concat(payLines_(row.owesNow, payRef_(trip, b.ref), cfg), ['',
         'If you have already paid, tap "I\'ve paid" on your booking page so we can match it:', link, '',
         'Any questions, just reply to this email.', '', cfg.clubName]).join('\n'),
   };
@@ -747,7 +753,7 @@ function publicTrip_(t, bookings, people) {
     places: Number(t.places), placesLeft: left, depositPerPerson: Number(t.depositPerPerson), depositDays: Number(t.depositDays),
     summary: t.summary, details: t.details, routes: parseRoutes_(t.routes), organiser: t.organiser,
     charityFee: t.charityFee === '' || t.charityFee === undefined ? 50 : Number(t.charityFee),
-    depositAtSignup: t.depositAtSignup === 'Yes' ? 'Yes' : 'No', bikeOptionsText: t.bikeOptions || '',
+    depositAtSignup: t.depositAtSignup === 'Yes' ? 'Yes' : 'No', bikeOptionsText: t.bikeOptions || '', refPrefix: refPrefix_(t),
     bikeOptions: parseBikeOptions_(t.bikeOptions), roomTypes: ROOM_TYPES, pedals: PEDALS,
     waiting: bookings.filter(function (b) { return b.tripId === t.id && b.status === 'Waiting list'; }).length,
   };
@@ -954,6 +960,7 @@ function bookingView_(b) {
     'emergencyRelation', 'emergencyMobile', 'people', 'depositDue', 'roomType', 'roomRequests', 'notes'].forEach(function (k) { booking[k] = b[k]; });
   booking.people = Number(b.people);
   booking.depositDue = Number(b.depositDue);
+  booking.payRef = trip ? payRef_(trip, b.ref) : b.ref;
   let money = null;
   if (trip) {
     const m = tripMoney_(trip);
@@ -1407,7 +1414,7 @@ function keepWarm() {
 if (typeof module !== 'undefined') {
   module.exports = {
     round2_: round2_, money_: money_, normaliseMobile_: normaliseMobile_, isoDate_: isoDate_, ageOn_: ageOn_, slugify_: slugify_,
-    generateReference_: generateReference_, parseRoutes_: parseRoutes_, placesTaken_: placesTaken_, placeCount_: placeCount_, supportCount_: supportCount_, depositFor_: depositFor_,
+    generateReference_: generateReference_, parseRoutes_: parseRoutes_, placesTaken_: placesTaken_, placeCount_: placeCount_, supportCount_: supportCount_, payRef_: payRef_, refPrefix_: refPrefix_, depositFor_: depositFor_,
     validateTrip_: validateTrip_, validatePerson_: validatePerson_, validateRegistration_: validateRegistration_,
     findDuplicate_: findDuplicate_, paymentTotals_: paymentTotals_, validateClaim_: validateClaim_, bookingLink_: bookingLink_,
     buildRegistrationEmail_: buildRegistrationEmail_, buildPlaceOfferedEmail_: buildPlaceOfferedEmail_, parseSettings_: parseSettings_,

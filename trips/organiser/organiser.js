@@ -205,13 +205,15 @@
       '<div class="field"><label>Organiser</label><input type="text" data-f="organiser" value="' + v('organiser') + '"></div></div>' +
       '<div class="grid2"><div class="field"><label>Dates (as shown to riders)</label><input type="text" data-f="datesText" value="' + v('datesText') + '" placeholder="Fri 28 May – Wed 2 June 2027"></div>' +
       '<div class="field"><label>First day of the trip</label><input type="date" data-f="startDate" value="' + v('startDate') + '"><span class="hint">Used to work out who is under 18.</span></div></div>' +
-      '<div class="grid2"><div class="field"><label>Places</label><input type="number" min="1" data-f="places" value="' + v('places') + '"><span class="hint">Everyone counts: riders, non-riders, children, support crew.</span></div>' +
+      '<div class="grid2"><div class="field"><label>Places</label><input type="number" min="1" data-f="places" value="' + v('places') + '"><span class="hint">Riders, non-riders and children each take a place. Support crew come on top.</span></div>' +
       '<div class="field"><label>Deposit per person (£)</label><input type="number" min="0" step="0.01" data-f="depositPerPerson" value="' + v('depositPerPerson') + '"><span class="hint">Support crew pay no deposit.</span></div></div>' +
       '<div class="grid2"><div class="field"><label>Days to pay the deposit</label><input type="number" min="1" data-f="depositDays" value="' + v('depositDays') + '"></div>' +
       '<div class="field"><label>Charity fee per rider (£)</label><input type="number" min="0" step="0.01" data-f="charityFee" value="' + esc(t.charityFee === undefined ? 50 : t.charityFee) + '"><span class="hint">Added to every rider’s bill and given to a charity the riders choose.</span></div></div>' +
       '<div class="grid2"><div class="field"><label>When is the deposit asked for?</label><select data-f="depositAtSignup">' +
         '<option value="No"' + (t.depositAtSignup !== 'Yes' ? ' selected' : '') + '>Later: sign up first, deposit once the trip is confirmed</option>' +
         '<option value="Yes"' + (t.depositAtSignup === 'Yes' ? ' selected' : '') + '>Straight away, when people sign up</option></select></div></div>' +
+      '<div class="grid2"><div class="field"><label>Payment reference prefix</label><input type="text" maxlength="8" data-f="refPrefix" value="' + esc(t.refPrefix || '') + '" placeholder="' + esc(T.payRef({ id: t.id || '' }, '').replace(/-$/, '') || 'e.g. RHINE') + '" style="text-transform:uppercase">' +
+        '<span class="hint">Put in front of everyone’s booking reference for this trip, e.g. <b>' + esc(T.payRef(t, 'KUTAK')) + '</b>, so payments sort by trip in the bank. Up to 8 letters or numbers. Leave empty to use the first word of the trip’s web name.</span></div></div>' +
       '<div class="field"><label>Bike options</label><textarea data-f="bikeOptions" rows="5">' + esc(t.bikeOptionsText || '') + '</textarea>' +
       '<span class="hint">One per line: what people choose, a | sign, then <b>hire</b> or <b>own</b>. For example: Hire a hybrid e-bike | hire. Hire riders are asked for height, inside leg, frame size, saddle height and pedals.</span></div>' +
       '<div class="field"><label>One-line summary</label><input type="text" data-f="summary" value="' + v('summary') + '"></div>' +
@@ -236,7 +238,7 @@
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var trip = { id: t ? t.id : '' };
-      ['name', 'status', 'organiser', 'datesText', 'startDate', 'places', 'depositPerPerson', 'depositDays', 'charityFee', 'depositAtSignup', 'bikeOptions', 'summary', 'routes', 'details', 'slug'].forEach(function (k) { trip[k] = get(k); });
+      ['name', 'status', 'organiser', 'datesText', 'startDate', 'places', 'depositPerPerson', 'depositDays', 'charityFee', 'depositAtSignup', 'refPrefix', 'bikeOptions', 'summary', 'routes', 'details', 'slug'].forEach(function (k) { trip[k] = get(k); });
       var btn = form.querySelector('[type=submit]');
       btn.disabled = true;
       admin('saveTrip', { trip: trip }).then(function (r) {
@@ -323,7 +325,7 @@
     var term = $('search').value.trim().toLowerCase();
     var list = bookings.filter(fn).filter(function (b) {
       if (!term) return true;
-      return [b.ref, b.email, b.leadName].concat((b.persons || []).map(function (p) { return p.fullName; })).join(' ').toLowerCase().indexOf(term) !== -1;
+      return [b.ref, T.payRef(current, b.ref), b.email, b.leadName].concat((b.persons || []).map(function (p) { return p.fullName; })).join(' ').toLowerCase().indexOf(term) !== -1;
     });
     $('bookingList').innerHTML = list.length ? list.map(bookingHtml).join('') : '<div class="card muted">Nothing here.</div>';
     wireBookings();
@@ -355,7 +357,7 @@
       : '<span class="chip ' + (b.status === 'Waiting list' ? 'warn' : '') + '">' + esc(b.status) + '</span>';
     var first = String(b.leadName).split(' ')[0];
     var waMsg = 'Hi ' + first + ', a reminder about your W/Rhinos booking for ' + current.name + ': your deposit of ' + T.money(left - b.totals.claimed) +
-      ' is due. Please pay to the club account using reference ' + b.ref + '. Your booking page: ' + b.link;
+      ' is due. Please pay to the club account using reference ' + T.payRef(current, b.ref) + '. Your booking page: ' + b.link;
     return '<details class="card booking" data-ref="' + esc(b.ref) + '"><summary>' +
       '<span class="who">' + esc(b.leadName) + (b.people > 1 ? ' +' + (b.people - 1) : '') + '</span>' + chip +
       '<span class="meta">' + esc(b.ref) + ' · ' + b.people + (b.people === 1 ? ' person' : ' people') + ' · booked ' + esc(T.niceDate(b.bookedAt)) + '</span>' +
@@ -368,6 +370,7 @@
           '<button type="button" class="btn btn-line btn-small" data-act="reject" data-id="' + esc(p.id) + '">Not found</button></span></div>';
       }).join('') + '</div>' : '') +
       '<div class="people-list">' + (b.persons || []).map(function (p) { return personCard(b, p); }).join('') + '</div>' +
+      '<p class="small" style="margin:0">Bank reference: <b>' + esc(T.payRef(current, b.ref)) + '</b></p>' +
       '<h4 class="sub">Contact</h4>' +
       '<dl class="kv">' + kv('Email', b.email ? '<a href="mailto:' + esc(b.email) + '">' + esc(b.email) + '</a>' : '') + kv('Mobile', tel(b.mobile)) +
       kv('Address', esc([b.address, b.postcode].filter(Boolean).join(', '))) +
@@ -770,6 +773,7 @@
 
   // ---------- money: balances, calls, reminders ----------
   function renderMoney() {
+    $('groupRequest').hidden = !(mon && mon.calls.length);
     var r = mon.result;
     stats($('monStats'), [
       [T.money(r.totals.cost), 'Total cost so far'],
@@ -793,7 +797,7 @@
       var bi = info[b.ref] || {};
       var first = String(bi.leadName || '').split(' ')[0];
       var due = Math.max(0, Math.round((b.owesNow - b.claimed) * 100) / 100);
-      var msg = 'Hi ' + first + ', a reminder that ' + T.money(due) + ' is due for your W/Rhinos booking on ' + current.name + '. Please pay to the club account using reference ' + b.ref + '. Your breakdown and the bank details: ' + bi.link;
+      var msg = 'Hi ' + first + ', a reminder that ' + T.money(due) + ' is due for your W/Rhinos booking on ' + current.name + '. Please pay to the club account using reference ' + T.payRef(current, b.ref) + '. Your breakdown and the bank details: ' + bi.link;
       return '<details class="card booking"><summary><span class="who">' + esc(bi.leadName) + (b.people.length > 1 ? ' +' + (b.people.length - 1) : '') + '</span>' +
         (b.owesNow > 0 ? '<span class="chip ' + (b.claimed >= b.owesNow ? 'warn' : 'bad') + '">' + (b.claimed >= b.owesNow ? 'Check payment' : 'Owes ' + T.money(b.owesNow)) + '</span>' : '<span class="chip ok">Up to date</span>') +
         '<span class="meta">' + esc(b.ref) + ' · cost so far ' + T.money(b.cost) + '</span><span class="meta">paid ' + T.money(b.confirmed) + '</span></summary>' +
@@ -873,7 +877,7 @@
       'Account name: ' + (bank.accountName || ''),
       'Sort code: ' + (bank.sortCode || ''),
       'Account number: ' + (bank.accountNumber || ''),
-      'Reference: your booking reference (the 5 letters in your registration email)',
+      'Reference: ' + T.payRef(current, '') + ' followed by your 5-letter booking reference, e.g. ' + T.payRef(current, 'KUTAK') + '. Your exact reference is on your booking page.',
       '', 'Once you have paid, open your booking page and tap "I\'ve paid" so we can check it.',
       'Lost your booking link? Get it again at ' + location.origin + '/trips/ ("Lost your booking link?").');
     return lines.join('\n');
@@ -887,6 +891,10 @@
   $('groupMsg').addEventListener('input', function () { $('waGroupMsg').href = 'https://wa.me/?text=' + encodeURIComponent(this.value); });
   $('copyGroupMsg').addEventListener('click', function () { T.copy($('groupMsg').value, this); });
   $('closeGroupMsg').addEventListener('click', function () { $('groupMsgCard').hidden = true; });
+  // The latest payment request worded as the first ask (e.g. "the trip is confirmed, please pay your deposit").
+  $('groupRequest').addEventListener('click', function () {
+    if (mon && mon.calls.length) showGroupMessage(groupMessage(mon.calls[mon.calls.length - 1]));
+  });
   $('groupReminder').addEventListener('click', function () {
     var last = mon.calls.length ? mon.calls[mon.calls.length - 1] : null;
     showGroupMessage(groupMessage(last ? { stage: 'Reminder', dueDate: last.dueDate } : null));
